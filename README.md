@@ -166,6 +166,15 @@ Contributions are welcome! Please:
 
 ## 📝 Changelog
 
+### v2.0.1 (2026-01-24)
+ What has been fixed:
+
+- 🐛 UUID in the Login Start package - added for versions 1.19+ (protocol 759+)
+- 🐛 Smart protocol definition - from the server version string
+- 🐛 Protocol priority is detectable first, then popular
+- 🐛 Whitelist extended dictionary - added Russian variants of phrases
+- 🐛 Improved diagnostics - detailed logs for debugging
+
 ### v2.0.0 (2026-01-23)
 - ✨ Complete rewrite with clean architecture
 - ✨ Added WhiteList detection
