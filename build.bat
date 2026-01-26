@@ -1,28 +1,46 @@
 @echo off
+chcp 65001 >nul
 echo ============================================
-echo MC Scanner - Build Script
+echo MC Scanner - FAT JAR Build
 echo ============================================
 
-echo.
-echo Compiling Java files...
-javac -cp "lib\json-20231013.jar" -d build src\*.java
+echo Cleaning...
+if exist build rmdir /s /q build
+mkdir build
+mkdir build\classes
 
+echo Compiling...
+javac -encoding UTF-8 -d build\classes -cp "lib\*" src\*.java
 if errorlevel 1 (
     echo ERROR: Compilation failed!
     pause
     exit /b 1
 )
 
-echo.
-echo Creating JAR file...
-cd build
-jar cfm MCScanner.jar ..\MANIFEST.MF *.class
-move MCScanner.jar ..
-cd ..
+echo Extracting libraries...
+cd build\classes
+jar xf ..\..\lib\json-20231013.jar
+del /q META-INF\*.SF META-INF\*.RSA META-INF\*.DSA 2>nul
+cd ..\..
 
-echo.
-echo ============================================
-echo Build Complete!
-echo ============================================
-echo To run: java -jar MCScanner.jar
+echo Creating manifest...
+echo Main-Class: ScannerGUI > build\MANIFEST.MF
+echo. >> build\MANIFEST.MF
+
+echo Building JAR...
+jar cfm MCScanner.jar build\MANIFEST.MF -C build\classes .
+
+if exist MCScanner.jar (
+    echo.
+    echo ============================================
+    echo SUCCESS! JAR created: MCScanner.jar
+    echo ============================================
+    echo.
+    echo To run: java -jar MCScanner.jar
+) else (
+    echo ERROR: JAR creation failed!
+    pause
+    exit /b 1
+)
+
 pause

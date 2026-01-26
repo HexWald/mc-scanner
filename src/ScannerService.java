@@ -6,11 +6,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 public class ScannerService {
-    private final String startIP;
+    private final List<String> targetIPs;
     private final int startPort;
     private final int limit;
     private final ScanSpeed scanSpeed;
-    private final boolean onlyOnline;
     private final ExecutorService executor;
     private final ConcurrentLinkedQueue<ServerInfo> results;
     private final AtomicInteger scannedCount;
@@ -36,13 +35,11 @@ public class ScannerService {
         public int getThreadPoolSize() { return threadPoolSize; }
     }
     
-    public ScannerService(String startIP, int startPort, int limit,
-                          ScanSpeed scanSpeed, boolean onlyOnline) {
-        this.startIP = startIP;
+    public ScannerService(List<String> targetIPs, int startPort, int limit, ScanSpeed scanSpeed) {
+        this.targetIPs = targetIPs;
         this.startPort = startPort;
         this.limit = limit;
         this.scanSpeed = scanSpeed;
-        this.onlyOnline = onlyOnline;
         this.executor = Executors.newFixedThreadPool(scanSpeed.threadPoolSize);
         this.results = new ConcurrentLinkedQueue<>();
         this.scannedCount = new AtomicInteger(0);
@@ -52,48 +49,69 @@ public class ScannerService {
     }
     
     public void scan(Consumer<ScanProgress> progressCallback) throws InterruptedException {
-        CountDownLatch latch = new CountDownLatch(limit);
+        int totalScans = targetIPs.size() * limit;
+        CountDownLatch latch = new CountDownLatch(totalScans);
         long startTime = System.currentTimeMillis();
         
-        for (int i = 0; i < limit && !cancelled; i++) {
-            final int port = startPort + i;
+        for (String ip : targetIPs) {
+            if (cancelled) break;
             
-            executor.submit(() -> {
-                try {
-                    ServerInfo info = MinecraftProtocol.queryServer(startIP, port);
-                    
-                    if (info.isOnline()) {
-                        onlineCount.incrementAndGet();
-                        if (info.hasWhitelist()) {
-                            whitelistCount.incrementAndGet();
+            for (int i = 0; i < limit && !cancelled; i++) {
+                final int port = startPort + i;
+                final String targetIP = ip;
+                
+                executor.submit(() -> {
+                    try {
+                        if (cancelled) {
+                            return;
                         }
+                        
+                        ServerInfo info = MinecraftProtocol.queryServer(targetIP, port);
+                        
+                        if (cancelled) {
+                            return;
+                        }
+                        
+                        if (info.isOnline()) {
+                            onlineCount.incrementAndGet();
+                            if (info.hasWhitelist()) {
+                                whitelistCount.incrementAndGet();
+                            }
+                            results.add(info);
+                        }
+                        
+                        int scanned = scannedCount.incrementAndGet();
+                        if (progressCallback != null && !cancelled) {
+                            progressCallback.accept(new ScanProgress(scanned, totalScans, info, 
+                                onlineCount.get(), whitelistCount.get()));
+                        }
+                        
+                    } catch (Exception e) {
+                        if (!cancelled) {
+                            System.err.println("Error: " + targetIP + ":" + port + " - " + e.getMessage());
+                        }
+                    } finally {
+                        latch.countDown();
                     }
-                    
-                    if (!onlyOnline || info.isOnline()) {
-                        results.add(info);
-                    }
-                    
-                    int scanned = scannedCount.incrementAndGet();
-                    if (progressCallback != null) {
-                        progressCallback.accept(new ScanProgress(scanned, limit, info, 
-                            onlineCount.get(), whitelistCount.get()));
-                    }
-                    
-                } catch (Exception e) {
-                    System.err.println("Error: " + startIP + ":" + port + " - " + e.getMessage());
-                } finally {
-                    latch.countDown();
+                });
+                
+                if (cancelled) break;
+                
+                if (i > 0 && i % 100 == 0) {
+                    Thread.sleep(scanSpeed.delayMs);
                 }
-            });
-            
-            if (i > 0 && i % 100 == 0) {
-                Thread.sleep(scanSpeed.delayMs);
             }
         }
         
-        latch.await();
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.SECONDS);
+        if (!cancelled) {
+            latch.await();
+        } else {
+            // Wait maximum 500ms for shutdown
+            latch.await(500, TimeUnit.MILLISECONDS);
+        }
+        
+        executor.shutdownNow();
+        executor.awaitTermination(1, TimeUnit.SECONDS);
         
         long totalTime = System.currentTimeMillis() - startTime;
         System.out.println("Scan completed in " + totalTime + "ms");
@@ -111,40 +129,84 @@ public class ScannerService {
             writer.println("                    MINECRAFT SERVER SCANNER - DETAILED RESULTS");
             writer.println("=".repeat(100));
             writer.println("Scan Date:    " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-            writer.println("Target IP:    " + startIP);
+            writer.println("Target IPs:   " + String.join(", ", targetIPs));
             writer.println("Port Range:   " + startPort + " - " + (startPort + limit - 1));
             writer.println("Scan Speed:   " + scanSpeed);
-            writer.println("Filter:       " + (onlyOnline ? "Only Online Servers" : "All Servers"));
             writer.println("=".repeat(100));
-            writer.println();
             
-            List<ServerInfo> sortedResults = new ArrayList<>(results);
-            sortedResults.sort(Comparator.comparingInt(ServerInfo::getPort));
-            
-            Map<String, Integer> versionCount = new HashMap<>();
-            
-            for (ServerInfo info : sortedResults) {
-                writer.println(info.toString());
-                if (info.isOnline()) {
-                    versionCount.put(info.getVersion(), versionCount.getOrDefault(info.getVersion(), 0) + 1);
-                }
+            // Group results by IP
+            Map<String, List<ServerInfo>> resultsByIP = new TreeMap<>();
+            for (ServerInfo info : results) {
+                resultsByIP.computeIfAbsent(info.getIp(), k -> new ArrayList<>()).add(info);
             }
             
-            writer.println();
-            writer.println("=".repeat(100));
-            writer.println("                              SCAN STATISTICS");
-            writer.println("=".repeat(100));
-            writer.println("Total Ports Scanned:          " + scannedCount.get());
-            writer.println("Online Servers Found:         " + onlineCount.get());
-            writer.println("Servers with WhiteList:       " + whitelistCount.get());
-            writer.println("Offline/Unreachable:          " + (scannedCount.get() - onlineCount.get()));
-            
-            if (!versionCount.isEmpty()) {
+            // Process each IP separately
+            for (Map.Entry<String, List<ServerInfo>> entry : resultsByIP.entrySet()) {
+                String ip = entry.getKey();
+                List<ServerInfo> ipResults = entry.getValue();
+                
+                // Sort by port
+                ipResults.sort(Comparator.comparingInt(ServerInfo::getPort));
+                
                 writer.println();
-                writer.println("Version Distribution:");
-                versionCount.entrySet().stream()
-                    .sorted((e1, e2) -> e2.getValue().compareTo(e1.getValue()))
-                    .forEach(e -> writer.println("  " + e.getKey() + ": " + e.getValue() + " server(s)"));
+                writer.println("━".repeat(100));
+                writer.println("IP: " + ip);
+                writer.println("━".repeat(100));
+                
+                // Categorize servers for this IP
+                List<ServerInfo> onlineWithPlayers = new ArrayList<>();
+                List<ServerInfo> whitelistWithPlayers = new ArrayList<>();
+                List<ServerInfo> whitelistNoPlayers = new ArrayList<>();
+                List<ServerInfo> onlineNoPlayers = new ArrayList<>();
+                
+                for (ServerInfo info : ipResults) {
+                    if (info.hasWhitelist()) {
+                        if (info.getPlayersOnline() > 0) {
+                            whitelistWithPlayers.add(info);
+                        } else {
+                            whitelistNoPlayers.add(info);
+                        }
+                    } else {
+                        if (info.getPlayersOnline() > 0) {
+                            onlineWithPlayers.add(info);
+                        } else {
+                            onlineNoPlayers.add(info);
+                        }
+                    }
+                }
+                
+                // Output categorized results
+                if (!onlineWithPlayers.isEmpty()) {
+                    writer.println("Online servers with players:");
+                    for (ServerInfo info : onlineWithPlayers) {
+                        writer.println("  " + info.toString());
+                    }
+                    writer.println();
+                }
+                
+                if (!whitelistWithPlayers.isEmpty()) {
+                    writer.println("Whitelist servers with players:");
+                    for (ServerInfo info : whitelistWithPlayers) {
+                        writer.println("  " + info.toString());
+                    }
+                    writer.println();
+                }
+                
+                if (!whitelistNoPlayers.isEmpty()) {
+                    writer.println("Whitelist servers (0 players):");
+                    for (ServerInfo info : whitelistNoPlayers) {
+                        writer.println("  " + info.toString());
+                    }
+                    writer.println();
+                }
+                
+                if (!onlineNoPlayers.isEmpty()) {
+                    writer.println("Online servers (0 players):");
+                    for (ServerInfo info : onlineNoPlayers) {
+                        writer.println("  " + info.toString());
+                    }
+                    writer.println();
+                }
             }
             
             writer.println("=".repeat(100));

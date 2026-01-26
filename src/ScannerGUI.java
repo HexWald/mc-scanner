@@ -2,14 +2,14 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.*;
+import java.util.List;
 
 public class ScannerGUI extends JFrame {
-    private final JTextField ipField;
+    private final JTextArea ipArea;
     private final JTextField portField;
     private final JTextField amountField;
     private final JComboBox<ScannerService.ScanSpeed> speedCombo;
-    private final JCheckBox onlineCheckBox;
     private final JButton scanButton;
     private final JProgressBar progressBar;
     private final JLabel statusLabel;
@@ -18,7 +18,7 @@ public class ScannerGUI extends JFrame {
     private ScannerService currentScanner;
     
     public ScannerGUI() {
-        super("MC Scanner - Professional Edition v2.0");
+        super("MC Scanner - Professional Edition v2.0.2");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setResizable(false);
         
@@ -30,38 +30,57 @@ public class ScannerGUI extends JFrame {
         gbc.insets = new Insets(5, 5, 5, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         
-        gbc.gridx = 0; gbc.gridy = 0;
-        inputPanel.add(new JLabel("Server IP:"), gbc);
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.NORTHWEST;
+        JLabel ipLabel = new JLabel("Server IPs:");
+        inputPanel.add(ipLabel, gbc);
         
-        gbc.gridx = 1; gbc.gridwidth = 2;
-        ipField = new JTextField("localhost", 20);
-        inputPanel.add(ipField, gbc);
+        gbc.gridx = 1; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.BOTH;
+        ipArea = new JTextArea(5, 20);
+        ipArea.setLineWrap(true);
+        ipArea.setWrapStyleWord(true);
+        ipArea.setText("localhost");
+        ipArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        JScrollPane scrollPane = new JScrollPane(ipArea);
+        scrollPane.setPreferredSize(new Dimension(250, 120));
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         
-        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 1;
+        // Enable mouse wheel scrolling
+        ipArea.addMouseWheelListener(e -> {
+            JScrollBar scrollBar = scrollPane.getVerticalScrollBar();
+            int scrollAmount = e.getUnitsToScroll() * 3;
+            scrollBar.setValue(scrollBar.getValue() + scrollAmount);
+        });
+        
+        inputPanel.add(scrollPane, gbc);
+        
+        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel formatLabel = new JLabel("<html><small>Format: IP or IP1-IP10 or IP1 IP2 IP3</small></html>");
+        formatLabel.setForeground(Color.GRAY);
+        inputPanel.add(formatLabel, gbc);
+        
+        gbc.gridx = 0; gbc.gridy = 2;
         inputPanel.add(new JLabel("Start Port:"), gbc);
         
         gbc.gridx = 1;
         portField = new JTextField("25565", 10);
+        portField.setFont(new Font("Monospaced", Font.PLAIN, 14));
         inputPanel.add(portField, gbc);
         
-        gbc.gridx = 0; gbc.gridy = 2;
+        gbc.gridx = 0; gbc.gridy = 3;
         inputPanel.add(new JLabel("Scan Amount:"), gbc);
         
         gbc.gridx = 1;
         amountField = new JTextField("100", 10);
+        amountField.setFont(new Font("Monospaced", Font.PLAIN, 14));
         inputPanel.add(amountField, gbc);
         
-        gbc.gridx = 0; gbc.gridy = 3;
+        gbc.gridx = 0; gbc.gridy = 4;
         inputPanel.add(new JLabel("Speed:"), gbc);
         
         gbc.gridx = 1;
         speedCombo = new JComboBox<>(ScannerService.ScanSpeed.values());
         speedCombo.setSelectedItem(ScannerService.ScanSpeed.FAST);
         inputPanel.add(speedCombo, gbc);
-        
-        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
-        onlineCheckBox = new JCheckBox("Only show online servers", true);
-        inputPanel.add(onlineCheckBox, gbc);
         
         mainPanel.add(inputPanel, BorderLayout.NORTH);
         
@@ -99,6 +118,73 @@ public class ScannerGUI extends JFrame {
         setLocationRelativeTo(null);
     }
     
+    private List<String> parseIPs(String input) {
+        List<String> ips = new ArrayList<>();
+        String[] parts = input.trim().split("[\\s,;]+");
+        
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+            
+            // Check for range format
+            if (part.contains("-")) {
+                String[] range = part.split("-", 2);
+                String start = range[0].trim();
+                String end = range[1].trim();
+                
+                // Try to find numbers anywhere in the string
+                java.util.regex.Pattern numberPattern = java.util.regex.Pattern.compile("(\\d+)");
+                java.util.regex.Matcher startMatcher = numberPattern.matcher(start);
+                java.util.regex.Matcher endMatcher = numberPattern.matcher(end);
+                
+                // Find all numbers in start string
+                List<Integer> startNumbers = new ArrayList<>();
+                List<Integer> startPositions = new ArrayList<>();
+                while (startMatcher.find()) {
+                    startNumbers.add(Integer.parseInt(startMatcher.group()));
+                    startPositions.add(startMatcher.start());
+                }
+                
+                // Find all numbers in end string
+                List<Integer> endNumbers = new ArrayList<>();
+                while (endMatcher.find()) {
+                    endNumbers.add(Integer.parseInt(endMatcher.group()));
+                }
+                
+                // If both have at least one number
+                if (!startNumbers.isEmpty() && !endNumbers.isEmpty()) {
+                    // Use the LAST number from each string
+                    int startNum = startNumbers.get(startNumbers.size() - 1);
+                    int endNum = endNumbers.get(endNumbers.size() - 1);
+                    int lastNumPos = startPositions.get(startPositions.size() - 1);
+                    
+                    // Extract prefix and suffix
+                    String prefix = start.substring(0, lastNumPos);
+                    String suffix = start.substring(lastNumPos + String.valueOf(startNum).length());
+                    
+                    // Generate range
+                    if (startNum <= endNum) {
+                        for (int i = startNum; i <= endNum; i++) {
+                            ips.add(prefix + i + suffix);
+                        }
+                    } else {
+                        // Reverse range
+                        for (int i = startNum; i >= endNum; i--) {
+                            ips.add(prefix + i + suffix);
+                        }
+                    }
+                } else {
+                    // No numbers found, add as-is
+                    ips.add(start);
+                    ips.add(end);
+                }
+            } else {
+                ips.add(part);
+            }
+        }
+        
+        return ips;
+    }
+    
     private void handleScanButton() {
         if (scanButton.getText().equals("Start Scan")) {
             startScan();
@@ -108,9 +194,15 @@ public class ScannerGUI extends JFrame {
     }
     
     private void startScan() {
-        String ip = ipField.getText().trim();
-        if (ip.isEmpty()) {
-            showError("Please enter an IP address");
+        String ipInput = ipArea.getText().trim();
+        if (ipInput.isEmpty()) {
+            showError("Please enter at least one IP address");
+            return;
+        }
+        
+        List<String> ips = parseIPs(ipInput);
+        if (ips.isEmpty()) {
+            showError("No valid IPs found");
             return;
         }
         
@@ -143,13 +235,12 @@ public class ScannerGUI extends JFrame {
         scanButton.setBackground(new Color(255, 100, 100));
         progressBar.setValue(0);
         progressBar.setString("Initializing...");
-        statusLabel.setText("Status: Starting scan...");
+        statusLabel.setText("Status: Starting scan for " + ips.size() + " IP(s)...");
         statsLabel.setText("Online: 0 | WhiteList: 0");
         
         ScannerService.ScanSpeed speed = (ScannerService.ScanSpeed) speedCombo.getSelectedItem();
-        boolean onlyOnline = onlineCheckBox.isSelected();
         
-        currentScanner = new ScannerService(ip, port, amount, speed, onlyOnline);
+        currentScanner = new ScannerService(ips, port, amount, speed);
         
         new Thread(() -> {
             try {
@@ -182,7 +273,7 @@ public class ScannerGUI extends JFrame {
                     statusLabel.setText("✓ Results saved successfully!");
                     
                     JOptionPane.showMessageDialog(this,
-                        "Scan completed!\n\nResults saved to:\n" + outputFile.getAbsolutePath(),
+                        "Scan completed!\n\nScanned " + ips.size() + " IP(s)\nResults saved to:\n" + outputFile.getAbsolutePath(),
                         "Scan Complete",
                         JOptionPane.INFORMATION_MESSAGE);
                     resetUI();
@@ -221,11 +312,10 @@ public class ScannerGUI extends JFrame {
     }
     
     private void setInputsEnabled(boolean enabled) {
-        ipField.setEnabled(enabled);
+        ipArea.setEnabled(enabled);
         portField.setEnabled(enabled);
         amountField.setEnabled(enabled);
         speedCombo.setEnabled(enabled);
-        onlineCheckBox.setEnabled(enabled);
     }
     
     private void showError(String message) {
