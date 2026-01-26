@@ -40,7 +40,11 @@ public class ScannerService {
         this.startPort = startPort;
         this.limit = limit;
         this.scanSpeed = scanSpeed;
-        this.executor = Executors.newFixedThreadPool(scanSpeed.threadPoolSize);
+        
+        // Increase thread pool for multiple IPs
+        int threadPoolSize = scanSpeed.threadPoolSize * Math.min(targetIPs.size(), 4);
+        this.executor = Executors.newFixedThreadPool(threadPoolSize);
+        
         this.results = new ConcurrentLinkedQueue<>();
         this.scannedCount = new AtomicInteger(0);
         this.onlineCount = new AtomicInteger(0);
@@ -53,10 +57,14 @@ public class ScannerService {
         CountDownLatch latch = new CountDownLatch(totalScans);
         long startTime = System.currentTimeMillis();
         
+        // Scan all IPs in parallel, not sequentially!
         for (String ip : targetIPs) {
             if (cancelled) break;
             
-            for (int i = 0; i < limit && !cancelled; i++) {
+            // Each IP gets scanned in parallel
+            for (int i = 0; i < limit; i++) {
+                if (cancelled) break;
+                
                 final int port = startPort + i;
                 final String targetIP = ip;
                 
@@ -94,19 +102,12 @@ public class ScannerService {
                         latch.countDown();
                     }
                 });
-                
-                if (cancelled) break;
-                
-                if (i > 0 && i % 100 == 0) {
-                    Thread.sleep(scanSpeed.delayMs);
-                }
             }
         }
         
         if (!cancelled) {
             latch.await();
         } else {
-            // Wait maximum 500ms for shutdown
             latch.await(500, TimeUnit.MILLISECONDS);
         }
         
@@ -133,80 +134,70 @@ public class ScannerService {
             writer.println("Port Range:   " + startPort + " - " + (startPort + limit - 1));
             writer.println("Scan Speed:   " + scanSpeed);
             writer.println("=".repeat(100));
+            writer.println();
             
-            // Group results by IP
-            Map<String, List<ServerInfo>> resultsByIP = new TreeMap<>();
-            for (ServerInfo info : results) {
-                resultsByIP.computeIfAbsent(info.getIp(), k -> new ArrayList<>()).add(info);
+            // Sort all results by port first
+            List<ServerInfo> sortedResults = new ArrayList<>(results);
+            sortedResults.sort(Comparator.comparingInt(ServerInfo::getPort));
+            
+            // Categorize ALL servers together (not by IP)
+            List<ServerInfo> onlineWithPlayers = new ArrayList<>();
+            List<ServerInfo> whitelistWithPlayers = new ArrayList<>();
+            List<ServerInfo> whitelistNoPlayers = new ArrayList<>();
+            List<ServerInfo> onlineNoPlayers = new ArrayList<>();
+            
+            for (ServerInfo info : sortedResults) {
+                if (info.hasWhitelist()) {
+                    if (info.getPlayersOnline() > 0) {
+                        whitelistWithPlayers.add(info);
+                    } else {
+                        whitelistNoPlayers.add(info);
+                    }
+                } else {
+                    if (info.getPlayersOnline() > 0) {
+                        onlineWithPlayers.add(info);
+                    } else {
+                        onlineNoPlayers.add(info);
+                    }
+                }
             }
             
-            // Process each IP separately
-            for (Map.Entry<String, List<ServerInfo>> entry : resultsByIP.entrySet()) {
-                String ip = entry.getKey();
-                List<ServerInfo> ipResults = entry.getValue();
-                
-                // Sort by port
-                ipResults.sort(Comparator.comparingInt(ServerInfo::getPort));
-                
+            writer.println("━".repeat(100));
+            writer.println("RESULTS FOR ALL IPs: " + String.join(", ", targetIPs));
+            writer.println("━".repeat(100));
+            writer.println();
+            
+            // Output categorized results
+            if (!onlineWithPlayers.isEmpty()) {
+                writer.println("Online servers with players:");
+                for (ServerInfo info : onlineWithPlayers) {
+                    writer.println("  " + info.toString());
+                }
                 writer.println();
-                writer.println("━".repeat(100));
-                writer.println("IP: " + ip);
-                writer.println("━".repeat(100));
-                
-                // Categorize servers for this IP
-                List<ServerInfo> onlineWithPlayers = new ArrayList<>();
-                List<ServerInfo> whitelistWithPlayers = new ArrayList<>();
-                List<ServerInfo> whitelistNoPlayers = new ArrayList<>();
-                List<ServerInfo> onlineNoPlayers = new ArrayList<>();
-                
-                for (ServerInfo info : ipResults) {
-                    if (info.hasWhitelist()) {
-                        if (info.getPlayersOnline() > 0) {
-                            whitelistWithPlayers.add(info);
-                        } else {
-                            whitelistNoPlayers.add(info);
-                        }
-                    } else {
-                        if (info.getPlayersOnline() > 0) {
-                            onlineWithPlayers.add(info);
-                        } else {
-                            onlineNoPlayers.add(info);
-                        }
-                    }
+            }
+            
+            if (!whitelistWithPlayers.isEmpty()) {
+                writer.println("Whitelist servers with players:");
+                for (ServerInfo info : whitelistWithPlayers) {
+                    writer.println("  " + info.toString());
                 }
-                
-                // Output categorized results
-                if (!onlineWithPlayers.isEmpty()) {
-                    writer.println("Online servers with players:");
-                    for (ServerInfo info : onlineWithPlayers) {
-                        writer.println("  " + info.toString());
-                    }
-                    writer.println();
+                writer.println();
+            }
+            
+            if (!whitelistNoPlayers.isEmpty()) {
+                writer.println("Whitelist servers (0 players):");
+                for (ServerInfo info : whitelistNoPlayers) {
+                    writer.println("  " + info.toString());
                 }
-                
-                if (!whitelistWithPlayers.isEmpty()) {
-                    writer.println("Whitelist servers with players:");
-                    for (ServerInfo info : whitelistWithPlayers) {
-                        writer.println("  " + info.toString());
-                    }
-                    writer.println();
+                writer.println();
+            }
+            
+            if (!onlineNoPlayers.isEmpty()) {
+                writer.println("Online servers (0 players):");
+                for (ServerInfo info : onlineNoPlayers) {
+                    writer.println("  " + info.toString());
                 }
-                
-                if (!whitelistNoPlayers.isEmpty()) {
-                    writer.println("Whitelist servers (0 players):");
-                    for (ServerInfo info : whitelistNoPlayers) {
-                        writer.println("  " + info.toString());
-                    }
-                    writer.println();
-                }
-                
-                if (!onlineNoPlayers.isEmpty()) {
-                    writer.println("Online servers (0 players):");
-                    for (ServerInfo info : onlineNoPlayers) {
-                        writer.println("  " + info.toString());
-                    }
-                    writer.println();
-                }
+                writer.println();
             }
             
             writer.println("=".repeat(100));

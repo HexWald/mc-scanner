@@ -18,7 +18,7 @@ public class ScannerGUI extends JFrame {
     private ScannerService currentScanner;
     
     public ScannerGUI() {
-        super("MC Scanner - Professional Edition v2.0.2");
+        super("MC Scanner - Professional Edition v2.0.3");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setResizable(false);
         
