@@ -19,6 +19,7 @@ A powerful, multi-threaded Java application for scanning and analyzing Minecraft
 - 💾 **Export Results** - Save scan results to formatted text files
 - ⚡ **Multiple Speed Modes** - From safe to aggressive scanning
 - 🎯 **Smart Filtering** - Show only online servers option
+- 🌟 **New function!** - Scan multi IP
 
 ---
 
@@ -165,6 +166,15 @@ Contributions are welcome! Please:
 ---
 
 ## 📝 Changelog
+
+### v2.0.2 (2026-01-26) Multi-IP scanning, improved UI, instant cancel
+
+- ✨ Added multi-IP and IP range scanning support (m28-m15, server1-server10)
+- ✨ Increased font size in IP input field (14pt)
+- 🐛 Added mouse wheel scrolling in IP text area
+- 🐛 Improved results grouping by IP in output file
+- 🐛 Instant scan cancellation (500ms vs 2-3s)
+- 🐛 Better IP range parser: supports numbers anywhere in string
 
 ### v2.0.1 (2026-01-24)
  What has been fixed:
