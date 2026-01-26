@@ -167,6 +167,9 @@ Contributions are welcome! Please:
 
 ## 📝 Changelog
 
+### v2.0.3 (2026-01-26) True parallel multi-IP scanning, unified results output
+- 🐛 True parallel multi-IP scanning, unified results output!
+
 ### v2.0.2 (2026-01-26) Multi-IP scanning, improved UI, instant cancel
 
 - ✨ Added multi-IP and IP range scanning support (m28-m15, server1-server10)
