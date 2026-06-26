@@ -9,6 +9,7 @@ public class ScannerGUI extends JFrame {
     private final JTextArea ipArea;
     private final JTextField portField;
     private final JTextField amountField;
+    private final JTextField usernameField;
     private final JComboBox<ScannerService.ScanSpeed> speedCombo;
     private final JButton scanButton;
     private final JProgressBar progressBar;
@@ -75,6 +76,14 @@ public class ScannerGUI extends JFrame {
         inputPanel.add(amountField, gbc);
         
         gbc.gridx = 0; gbc.gridy = 4;
+        inputPanel.add(new JLabel("Check Nickname:"), gbc);
+
+        gbc.gridx = 1;
+        usernameField = new JTextField("MCScanner", 10);
+        usernameField.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        inputPanel.add(usernameField, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 5;
         inputPanel.add(new JLabel("Speed:"), gbc);
         
         gbc.gridx = 1;
@@ -233,6 +242,12 @@ public class ScannerGUI extends JFrame {
             showError("Invalid amount");
             return;
         }
+
+        String checkUsername = usernameField.getText().trim();
+        if (!checkUsername.matches("[A-Za-z0-9_]{3,16}")) {
+            showError("Check nickname must be 3-16 characters: A-Z, 0-9 or _");
+            return;
+        }
         
         setInputsEnabled(false);
         scanButton.setText("Cancel Scan");
@@ -244,7 +259,7 @@ public class ScannerGUI extends JFrame {
         
         ScannerService.ScanSpeed speed = (ScannerService.ScanSpeed) speedCombo.getSelectedItem();
         
-        currentScanner = new ScannerService(ips, port, amount, speed);
+        currentScanner = new ScannerService(ips, port, amount, speed, checkUsername);
         
         new Thread(() -> {
             try {
@@ -319,6 +334,7 @@ public class ScannerGUI extends JFrame {
         ipArea.setEnabled(enabled);
         portField.setEnabled(enabled);
         amountField.setEnabled(enabled);
+        usernameField.setEnabled(enabled);
         speedCombo.setEnabled(enabled);
     }
     

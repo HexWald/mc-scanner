@@ -11,6 +11,7 @@ import java.util.Map;
 public class MinecraftProtocol {
     private static final int CONNECT_TIMEOUT = 3000;
     private static final int READ_TIMEOUT = 5000;
+    private static final String DEFAULT_CHECK_USERNAME = "MCScanner";
     
     private static final int[] PROTOCOL_VERSIONS = {
         774, 773, 772, 770, 769, 768, 767, 766, 765, 764, 763, 762, 761, 760, 759,
@@ -77,14 +78,25 @@ public class MinecraftProtocol {
     }
     
     public static ServerInfo queryServer(String ip, int port) {
+        return queryServer(ip, port, DEFAULT_CHECK_USERNAME);
+    }
+
+    public static ServerInfo queryServer(String ip, int port, String checkUsername) {
         try {
-            return performHandshake(ip, port);
+            return performHandshake(ip, port, normalizeCheckUsername(checkUsername));
         } catch (Exception e) {
             return new ServerInfo(ip, port);
         }
     }
+
+    private static String normalizeCheckUsername(String checkUsername) {
+        if (checkUsername == null || !checkUsername.matches("[A-Za-z0-9_]{3,16}")) {
+            return DEFAULT_CHECK_USERNAME;
+        }
+        return checkUsername;
+    }
     
-    private static ServerInfo performHandshake(String ip, int port) throws IOException {
+    private static ServerInfo performHandshake(String ip, int port, String checkUsername) throws IOException {
         long startTime = System.currentTimeMillis();
         
         try (Socket socket = new Socket()) {
@@ -126,7 +138,7 @@ public class MinecraftProtocol {
                 
                 long ping = System.currentTimeMillis() - startTime;
                 
-                return parseServerInfo(ip, port, json, ping);
+                return parseServerInfo(ip, port, json, ping, checkUsername);
             }
         }
     }
@@ -146,7 +158,7 @@ public class MinecraftProtocol {
         out.write(packet);
     }
     
-    private static ServerInfo parseServerInfo(String ip, int port, String json, long ping) {
+    private static ServerInfo parseServerInfo(String ip, int port, String json, long ping, String checkUsername) {
         try {
             JSONObject obj = new JSONObject(json);
             
@@ -172,7 +184,7 @@ public class MinecraftProtocol {
                 }
             }
             
-            boolean hasWhitelist = checkWhitelistSmart(ip, port, version, protocolVersion);
+            boolean hasWhitelist = checkWhitelistSmart(ip, port, version, protocolVersion, checkUsername);
             
             return new ServerInfo(ip, port, true, version, online, max, motd, hasWhitelist, ping);
             
@@ -207,11 +219,12 @@ public class MinecraftProtocol {
         return text.toString();
     }
     
-    private static boolean checkWhitelistSmart(String ip, int port, String version, int reportedProtocol) {
+    private static boolean checkWhitelistSmart(String ip, int port, String version, int reportedProtocol, String checkUsername) {
         System.out.println("\n" + repeat("=", 70));
         System.out.println("[WhiteList Check] Starting for: " + ip + ":" + port);
         System.out.println("[WhiteList Check] Server version: " + version);
         System.out.println("[WhiteList Check] Reported protocol: " + reportedProtocol);
+        System.out.println("[WhiteList Check] Check nickname: " + checkUsername);
         System.out.println(repeat("=", 70));
         
         // Try to get protocol from reported version
@@ -219,7 +232,7 @@ public class MinecraftProtocol {
         
         if (detectedProtocol != null) {
             System.out.println("[WhiteList Check] Detected protocol from version: " + detectedProtocol);
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, "WhiteListTest", detectedProtocol);
+            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, detectedProtocol);
             if (result.status == CheckStatus.SUCCESS) {
                 System.out.println("[WhiteList Check] ✓ SUCCESS with detected protocol!");
                 System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
@@ -230,7 +243,7 @@ public class MinecraftProtocol {
         // If we have reported protocol from server, try it
         if (reportedProtocol > 0) {
             System.out.println("[WhiteList Check] Trying reported protocol: " + reportedProtocol);
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, "WhiteListTest", reportedProtocol);
+            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, reportedProtocol);
             if (result.status == CheckStatus.SUCCESS) {
                 System.out.println("[WhiteList Check] ✓ SUCCESS with reported protocol!");
                 System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
@@ -247,7 +260,7 @@ public class MinecraftProtocol {
                 continue; // Already tried
             }
             
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, "WhiteListTest", protocol);
+            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, protocol);
             
             if (result.status == CheckStatus.SUCCESS) {
                 System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
@@ -270,7 +283,7 @@ public class MinecraftProtocol {
                 continue;
             }
             
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, "WhiteListTest", protocol);
+            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, protocol);
             if (result.status == CheckStatus.SUCCESS) {
                 System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
                 return result.hasWhitelist;

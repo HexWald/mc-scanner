@@ -84,12 +84,13 @@ chmod +x build.sh
 1. **Enter Server IP** - Domain or IP address (e.g., `play.hypixel.net`)
 2. **Set Start Port** - First port to scan (default: `25565`)
 3. **Choose Amount** - Number of ports to scan (1-10000)
-4. **Select Speed:**
+4. **Set Check Nickname** - Username used for whitelist login checks
+5. **Select Speed:**
    - `MEDIUM` - Safe, 20 threads (500ms delay)
    - `FAST` - Recommended, 50 threads (125ms delay)
    - `VERY_FAST` - Aggressive, 100 threads (50ms delay)
    - `DANGEROUS` - Maximum, 200 threads (10ms delay)
-5. **Click "Start Scan"**
+6. **Click "Start Scan"**
 
 ---
 

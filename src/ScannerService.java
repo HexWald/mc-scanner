@@ -10,6 +10,7 @@ public class ScannerService {
     private final int startPort;
     private final int limit;
     private final ScanSpeed scanSpeed;
+    private final String checkUsername;
     private final ExecutorService executor;
     private final ConcurrentLinkedQueue<ServerInfo> results;
     private final AtomicInteger scannedCount;
@@ -36,6 +37,10 @@ public class ScannerService {
     }
     
     public ScannerService(List<String> targetIPs, int startPort, int limit, ScanSpeed scanSpeed) {
+        this(targetIPs, startPort, limit, scanSpeed, "MCScanner");
+    }
+
+    public ScannerService(List<String> targetIPs, int startPort, int limit, ScanSpeed scanSpeed, String checkUsername) {
         if (targetIPs == null || targetIPs.isEmpty()) {
             throw new IllegalArgumentException("At least one target IP is required");
         }
@@ -51,11 +56,15 @@ public class ScannerService {
         if (scanSpeed == null) {
             throw new IllegalArgumentException("Scan speed is required");
         }
+        if (checkUsername == null || !checkUsername.matches("[A-Za-z0-9_]{3,16}")) {
+            throw new IllegalArgumentException("Check nickname must be 3-16 characters: A-Z, 0-9 or _");
+        }
 
         this.targetIPs = targetIPs;
         this.startPort = startPort;
         this.limit = limit;
         this.scanSpeed = scanSpeed;
+        this.checkUsername = checkUsername;
         
         // Increase thread pool for multiple IPs
         int threadPoolSize = scanSpeed.threadPoolSize * Math.min(targetIPs.size(), 4);
@@ -90,7 +99,7 @@ public class ScannerService {
                             return;
                         }
                         
-                        ServerInfo info = MinecraftProtocol.queryServer(targetIP, port);
+                        ServerInfo info = MinecraftProtocol.queryServer(targetIP, port, checkUsername);
                         
                         if (cancelled) {
                             return;
@@ -162,6 +171,7 @@ public class ScannerService {
             writer.println("Target IPs:   " + String.join(", ", targetIPs));
             writer.println("Port Range:   " + startPort + " - " + (startPort + limit - 1));
             writer.println("Scan Speed:   " + scanSpeed);
+            writer.println("Check Nick:   " + checkUsername);
             writer.println(repeat("=", 100));
             writer.println();
             
