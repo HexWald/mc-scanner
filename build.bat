@@ -10,7 +10,7 @@ mkdir build
 mkdir build\classes
 
 echo Compiling...
-javac -encoding UTF-8 -d build\classes -cp "lib\*" src\*.java
+javac -encoding UTF-8 -source 8 -target 8 -d build\classes -cp "lib\*" src\*.java
 if errorlevel 1 (
     echo ERROR: Compilation failed!
     pause

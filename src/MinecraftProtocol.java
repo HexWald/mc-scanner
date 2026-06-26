@@ -208,11 +208,11 @@ public class MinecraftProtocol {
     }
     
     private static boolean checkWhitelistSmart(String ip, int port, String version, int reportedProtocol) {
-        System.out.println("\n" + "=".repeat(70));
+        System.out.println("\n" + repeat("=", 70));
         System.out.println("[WhiteList Check] Starting for: " + ip + ":" + port);
         System.out.println("[WhiteList Check] Server version: " + version);
         System.out.println("[WhiteList Check] Reported protocol: " + reportedProtocol);
-        System.out.println("=".repeat(70));
+        System.out.println(repeat("=", 70));
         
         // Try to get protocol from reported version
         Integer detectedProtocol = getProtocolFromVersion(version);
@@ -277,7 +277,7 @@ public class MinecraftProtocol {
             }
         }
         
-        System.out.println("[WhiteList Check] All protocols failed - assuming NO WHITELIST");
+        System.out.println("[WhiteList Check] All protocols failed or were inconclusive - could not confirm whitelist");
         return false;
     }
     
@@ -315,6 +315,7 @@ public class MinecraftProtocol {
     private enum CheckStatus {
         SUCCESS,
         PROTOCOL_MISMATCH,
+        INCONCLUSIVE,
         ERROR
     }
     
@@ -410,16 +411,16 @@ public class MinecraftProtocol {
                         }
                         
                     } else if (packetId == 0x01) { // Encryption Request
-                        System.out.println("[WhiteList Check] → Encryption = NO whitelist");
-                        return new WhitelistCheckResult(CheckStatus.SUCCESS, false);
+                        System.out.println("[WhiteList Check] -> Encryption request = inconclusive");
+                        return new WhitelistCheckResult(CheckStatus.INCONCLUSIVE, false);
                         
                     } else if (packetId == 0x02) { // Login Success
                         System.out.println("[WhiteList Check] → Login success = NO whitelist");
                         return new WhitelistCheckResult(CheckStatus.SUCCESS, false);
                         
                     } else if (packetId == 0x03) { // Set Compression
-                        System.out.println("[WhiteList Check] → Compression = NO whitelist");
-                        return new WhitelistCheckResult(CheckStatus.SUCCESS, false);
+                        System.out.println("[WhiteList Check] -> Compression = inconclusive");
+                        return new WhitelistCheckResult(CheckStatus.INCONCLUSIVE, false);
                     }
                     
                 } catch (IOException e) {
@@ -541,6 +542,14 @@ public class MinecraftProtocol {
         byte[] bytes = string.getBytes(StandardCharsets.UTF_8);
         writeVarInt(out, bytes.length);
         out.write(bytes);
+    }
+
+    private static String repeat(String text, int count) {
+        StringBuilder builder = new StringBuilder(text.length() * count);
+        for (int i = 0; i < count; i++) {
+            builder.append(text);
+        }
+        return builder.toString();
     }
     
     private static void writeVarInt(DataOutputStream out, int value) throws IOException {

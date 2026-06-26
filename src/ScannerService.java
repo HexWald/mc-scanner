@@ -36,6 +36,22 @@ public class ScannerService {
     }
     
     public ScannerService(List<String> targetIPs, int startPort, int limit, ScanSpeed scanSpeed) {
+        if (targetIPs == null || targetIPs.isEmpty()) {
+            throw new IllegalArgumentException("At least one target IP is required");
+        }
+        if (startPort < 1 || startPort > 65535) {
+            throw new IllegalArgumentException("Start port must be between 1 and 65535");
+        }
+        if (limit < 1) {
+            throw new IllegalArgumentException("Scan amount must be greater than 0");
+        }
+        if ((long) startPort + limit - 1 > 65535) {
+            throw new IllegalArgumentException("Port range must end at 65535 or lower");
+        }
+        if (scanSpeed == null) {
+            throw new IllegalArgumentException("Scan speed is required");
+        }
+
         this.targetIPs = targetIPs;
         this.startPort = startPort;
         this.limit = limit;
@@ -99,6 +115,7 @@ public class ScannerService {
                             System.err.println("Error: " + targetIP + ":" + port + " - " + e.getMessage());
                         }
                     } finally {
+                        applyWorkerDelay();
                         latch.countDown();
                     }
                 });
@@ -117,6 +134,18 @@ public class ScannerService {
         long totalTime = System.currentTimeMillis() - startTime;
         System.out.println("Scan completed in " + totalTime + "ms");
     }
+
+    private void applyWorkerDelay() {
+        if (cancelled || scanSpeed.getDelayMs() <= 0) {
+            return;
+        }
+
+        try {
+            Thread.sleep(scanSpeed.getDelayMs());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
     
     public void cancel() {
         cancelled = true;
@@ -126,14 +155,14 @@ public class ScannerService {
     public void saveResults(File file) throws IOException {
         try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(file)), true)) {
             
-            writer.println("=".repeat(100));
+            writer.println(repeat("=", 100));
             writer.println("                    MINECRAFT SERVER SCANNER - DETAILED RESULTS");
-            writer.println("=".repeat(100));
+            writer.println(repeat("=", 100));
             writer.println("Scan Date:    " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
             writer.println("Target IPs:   " + String.join(", ", targetIPs));
             writer.println("Port Range:   " + startPort + " - " + (startPort + limit - 1));
             writer.println("Scan Speed:   " + scanSpeed);
-            writer.println("=".repeat(100));
+            writer.println(repeat("=", 100));
             writer.println();
             
             // Sort all results by port first
@@ -162,9 +191,9 @@ public class ScannerService {
                 }
             }
             
-            writer.println("━".repeat(100));
+            writer.println(repeat("\u2501", 100));
             writer.println("RESULTS FOR ALL IPs: " + String.join(", ", targetIPs));
-            writer.println("━".repeat(100));
+            writer.println(repeat("\u2501", 100));
             writer.println();
             
             // Output categorized results
@@ -200,8 +229,16 @@ public class ScannerService {
                 writer.println();
             }
             
-            writer.println("=".repeat(100));
+            writer.println(repeat("=", 100));
         }
+    }
+
+    private static String repeat(String text, int count) {
+        StringBuilder builder = new StringBuilder(text.length() * count);
+        for (int i = 0; i < count; i++) {
+            builder.append(text);
+        }
+        return builder.toString();
     }
     
     public static class ScanProgress {

@@ -2,7 +2,7 @@
 
 [![License: MIT]](https://opensource.org/licenses/MIT)
 [![Java]](https://www.java.com/)
-[![Release]](https://github.com/DilanBlue/mc-scanner/releases)
+[![Release]](https://github.com/HexWald/mc-scanner/releases)
 
 **Professional Minecraft Server Scanner with WhiteList Detection**
 
@@ -35,14 +35,14 @@ A powerful, multi-threaded Java application for scanning and analyzing Minecraft
 **Option 1: Download Pre-built JAR**
 ```bash
 # Download from Releases page
-# https://github.com/DilanBlue/mc-scanner/releases/latest
+# https://github.com/HexWald/mc-scanner/releases/latest
 
 java -jar MCScanner.jar
 ```
 
 **Option 2: Build from Source**
 ```bash
-git clone https://github.com/DilanBlue/mc-scanner.git
+git clone https://github.com/HexWald/mc-scanner.git
 cd mc-scanner
 ./build.bat    # Windows
 ./build.sh     # Linux/Mac
@@ -62,14 +62,14 @@ java -jar MCScanner.jar
 
 **Windows:**
 ```batch
-git clone https://github.com/DilanBlue/mc-scanner.git
+git clone https://github.com/HexWald/mc-scanner.git
 cd mc-scanner
 build.bat
 ```
 
 **Linux/Mac:**
 ```bash
-git clone https://github.com/DilanBlue/mc-scanner.git
+git clone https://github.com/HexWald/mc-scanner.git
 cd mc-scanner
 chmod +x build.sh
 ./build.sh

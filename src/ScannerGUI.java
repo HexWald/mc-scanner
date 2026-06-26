@@ -225,6 +225,10 @@ public class ScannerGUI extends JFrame {
                 showError("Amount must be between 1 and 10000");
                 return;
             }
+            if ((long) port + amount - 1 > 65535) {
+                showError("Port range must end at 65535 or lower");
+                return;
+            }
         } catch (NumberFormatException e) {
             showError("Invalid amount");
             return;
