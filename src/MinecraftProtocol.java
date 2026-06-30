@@ -21,6 +21,7 @@ public class MinecraftProtocol {
     
     // Mapping version names to protocol numbers
     private static final Map<String, Integer> VERSION_MAP = new HashMap<>();
+    private static final Map<Integer, String> CLIENT_VERSION_MAP = new HashMap<>();
     static {
         VERSION_MAP.put("1.21.11", 774);
         VERSION_MAP.put("1.21.10", 773);
@@ -75,6 +76,48 @@ public class MinecraftProtocol {
         VERSION_MAP.put("1.9", 107);
         VERSION_MAP.put("1.8", 47);
         VERSION_MAP.put("1.7.10", 5);
+
+        CLIENT_VERSION_MAP.put(774, "1.21.11");
+        CLIENT_VERSION_MAP.put(773, "1.21.9");
+        CLIENT_VERSION_MAP.put(772, "1.21.8");
+        CLIENT_VERSION_MAP.put(770, "1.21.6");
+        CLIENT_VERSION_MAP.put(769, "1.21.5");
+        CLIENT_VERSION_MAP.put(768, "1.21.4");
+        CLIENT_VERSION_MAP.put(767, "1.21.1");
+        CLIENT_VERSION_MAP.put(766, "1.20.6");
+        CLIENT_VERSION_MAP.put(765, "1.20.4");
+        CLIENT_VERSION_MAP.put(764, "1.20.2");
+        CLIENT_VERSION_MAP.put(763, "1.20.1");
+        CLIENT_VERSION_MAP.put(762, "1.19.4");
+        CLIENT_VERSION_MAP.put(761, "1.19.3");
+        CLIENT_VERSION_MAP.put(760, "1.19.2");
+        CLIENT_VERSION_MAP.put(759, "1.19");
+        CLIENT_VERSION_MAP.put(758, "1.18.2");
+        CLIENT_VERSION_MAP.put(757, "1.18.1");
+        CLIENT_VERSION_MAP.put(756, "1.17.1");
+        CLIENT_VERSION_MAP.put(755, "1.17");
+        CLIENT_VERSION_MAP.put(754, "1.16.5");
+        CLIENT_VERSION_MAP.put(753, "1.16.3");
+        CLIENT_VERSION_MAP.put(751, "1.16.2");
+        CLIENT_VERSION_MAP.put(736, "1.16.1");
+        CLIENT_VERSION_MAP.put(735, "1.16");
+        CLIENT_VERSION_MAP.put(578, "1.15.2");
+        CLIENT_VERSION_MAP.put(575, "1.15");
+        CLIENT_VERSION_MAP.put(498, "1.14.4");
+        CLIENT_VERSION_MAP.put(477, "1.14");
+        CLIENT_VERSION_MAP.put(404, "1.13.2");
+        CLIENT_VERSION_MAP.put(393, "1.13");
+        CLIENT_VERSION_MAP.put(340, "1.12.2");
+        CLIENT_VERSION_MAP.put(335, "1.12");
+        CLIENT_VERSION_MAP.put(316, "1.11.2");
+        CLIENT_VERSION_MAP.put(315, "1.11");
+        CLIENT_VERSION_MAP.put(210, "1.10");
+        CLIENT_VERSION_MAP.put(110, "1.9.4");
+        CLIENT_VERSION_MAP.put(109, "1.9.2");
+        CLIENT_VERSION_MAP.put(108, "1.9.1");
+        CLIENT_VERSION_MAP.put(107, "1.9");
+        CLIENT_VERSION_MAP.put(47, "1.8");
+        CLIENT_VERSION_MAP.put(5, "1.7.10");
     }
     
     public static ServerInfo queryServer(String ip, int port) {
@@ -186,7 +229,7 @@ public class MinecraftProtocol {
             
             boolean hasWhitelist = checkWhitelistSmart(ip, port, version, protocolVersion, checkUsername);
             
-            return new ServerInfo(ip, port, true, version, online, max, motd, hasWhitelist, ping);
+            return new ServerInfo(ip, port, true, version, online, max, motd, hasWhitelist, ping, protocolVersion);
             
         } catch (JSONException e) {
             return new ServerInfo(ip, port, true, "Parse Error", 0, 0, "", false, ping);
@@ -292,6 +335,21 @@ public class MinecraftProtocol {
         
         System.out.println("[WhiteList Check] All protocols failed or were inconclusive - could not confirm whitelist");
         return false;
+    }
+
+    public static String getClientVersionName(String reportedVersion, int protocolVersion) {
+        String byProtocol = CLIENT_VERSION_MAP.get(protocolVersion);
+        if (byProtocol != null) {
+            return byProtocol;
+        }
+
+        Integer detectedProtocol = getProtocolFromVersion(reportedVersion);
+        if (detectedProtocol == null) {
+            return "";
+        }
+
+        String byReportedName = CLIENT_VERSION_MAP.get(detectedProtocol);
+        return byReportedName != null ? byReportedName : "";
     }
     
     private static Integer getProtocolFromVersion(String version) {

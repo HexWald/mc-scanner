@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 title MC Scanner Console
 echo ============================================
 echo MC Scanner - Debug Console
@@ -7,5 +8,5 @@ echo.
 echo Starting application...
 echo Console output will appear below:
 echo.
-java -jar MCScanner.jar
+java -Dfile.encoding=UTF-8 -jar MCScanner.jar
 pause

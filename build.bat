@@ -29,6 +29,11 @@ echo. >> build\MANIFEST.MF
 
 echo Building JAR...
 jar cfm MCScanner.jar build\MANIFEST.MF -C build\classes .
+if errorlevel 1 (
+    echo ERROR: JAR creation failed! Close any running MCScanner window and try again.
+    pause
+    exit /b 1
+)
 
 if exist MCScanner.jar (
     echo.

@@ -1,0 +1,14 @@
+{
+  "name": "mc-scanner-screenshot-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "capture": "node capture.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.33.0",
+    "playwright-core": "^1.56.1",
+    "prismarine-viewer": "^1.33.0"
+  }
+}

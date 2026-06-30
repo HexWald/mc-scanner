@@ -8,6 +8,8 @@
 build/
 out/
 target/
+node_modules/
+tools/screenshot-bot/node_modules/
 
 # JAR files (except library)
 *.jar
@@ -29,6 +31,8 @@ desktop.ini
 
 # Scan results
 MCScanner_Results_*.txt
+results/
+screenshots/
 
 # Temporary files
 *.tmp
