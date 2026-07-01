@@ -7,6 +7,7 @@
     "capture": "node capture.js"
   },
   "dependencies": {
+    "canvas": "^3.2.0",
     "mineflayer": "^4.33.0",
     "playwright-core": "^1.56.1",
     "prismarine-viewer": "^1.33.0"
