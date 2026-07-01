@@ -1,220 +1,199 @@
-# 🎮 MC Scanner - Minecraft Server Scanner
+# MC Scanner
 
-[![License: MIT]](https://opensource.org/licenses/MIT)
-[![Java]](https://www.java.com/)
-[![Release]](https://github.com/HexWald/mc-scanner/releases)
+Небольшой GUI-сканер Minecraft-серверов на Java Swing.
 
-**Professional Minecraft Server Scanner with WhiteList Detection**
+Он пробегает IP и порты, показывает онлайн-серверы, проверяет whitelist, сохраняет результаты в TXT/CSV/JSON и может делать реальные скриншоты после входа ботом на сервер.
 
-A powerful, multi-threaded Java application for scanning and analyzing Minecraft servers. Features a modern GUI, real-time progress tracking, and automatic WhiteList detection.
+## Что умеет
 
----
+- сканировать один IP, список IP или простой диапазон;
+- проверять много портов подряд, начиная с выбранного порта;
+- показывать версию сервера, протокол, онлайн, максимум игроков, ping и MOTD;
+- проверять whitelist по нику, который задается в GUI;
+- сохранять скриншоты только там, где бот реально смог зайти на сервер;
+- экспортировать результаты в `TXT`, `CSV` и `JSON`;
+- запускать повторный мониторинг каждые N минут и показывать изменения;
+- открывать папки с результатами и скриншотами прямо из окна;
+- чистить старые results/screenshots одной кнопкой;
+- переключать тему: dark, light или system.
 
-## ✨ Features
+## Как запустить
 
-- 🚀 **Multi-threaded Scanning** - Fast parallel port scanning
-- 🔍 **WhiteList Detection** - Automatically detects if servers have whitelist enabled
-- 📊 **Detailed Statistics** - Server version, player count, ping, MOTD
-- 🎨 **Modern GUI** - Clean, intuitive interface with real-time updates
-- 💾 **Export Results** - Save scan results to formatted text files
-- ⚡ **Multiple Speed Modes** - From safe to aggressive scanning
-- 🎯 **Smart Filtering** - Show only online servers option
-- 🌟 **New function!** - Scan multi IP
+Если уже есть `MCScanner.jar`:
 
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Java 8 or higher
-- Internet connection
-
-### Download
-
-**Option 1: Download Pre-built JAR**
-```bash
-# Download from Releases page
-# https://github.com/HexWald/mc-scanner/releases/latest
-
+```powershell
 java -jar MCScanner.jar
 ```
 
-**Option 2: Build from Source**
-```bash
-git clone https://github.com/HexWald/mc-scanner.git
-cd mc-scanner
-./build.bat    # Windows
-./build.sh     # Linux/Mac
-java -jar MCScanner.jar
+На Windows удобнее запускать через:
+
+```powershell
+run-with-console.bat
 ```
 
----
+Так проще увидеть ошибки Node.js, браузера или скриншот-бота, если они появятся.
 
-## 🛠️ Building from Source
+## Сборка
 
-### Requirements
+Нужен JDK 8 или новее.
 
-- JDK 8 or higher
-- org.json library (included in `lib/`)
+Windows:
 
-### Build Steps
-
-**Windows:**
-```batch
-git clone https://github.com/HexWald/mc-scanner.git
-cd mc-scanner
+```powershell
 build.bat
 ```
 
-**Linux/Mac:**
+Linux/macOS:
+
 ```bash
-git clone https://github.com/HexWald/mc-scanner.git
-cd mc-scanner
 chmod +x build.sh
 ./build.sh
 ```
 
----
+После сборки рядом появится `MCScanner.jar`.
 
-## 📖 Usage Guide
+## Скриншоты серверов
 
-### Basic Scanning
+Скриншоты делает отдельный Node.js helper из `tools/screenshot-bot`.
 
-1. **Enter Server IP** - Domain or IP address (e.g., `play.hypixel.net`)
-2. **Set Start Port** - First port to scan (default: `25565`)
-3. **Choose Amount** - Number of ports to scan (1-10000)
-4. **Set Check Nickname** - Username used for whitelist login checks
-5. **Select Speed:**
-   - `MEDIUM` - Safe, 20 threads (500ms delay)
-   - `FAST` - Recommended, 50 threads (125ms delay)
-   - `VERY_FAST` - Aggressive, 100 threads (50ms delay)
-   - `DANGEROUS` - Maximum, 200 threads (10ms delay)
-6. **Click "Start Scan"**
+Как это работает:
 
----
+1. Java находит онлайн-сервер.
+2. Node.js запускает mineflayer-бота.
+3. Бот пытается зайти на сервер с указанным ником.
+4. Если вход успешный, открывается локальный prismarine-viewer.
+5. Headless Edge/Chrome сохраняет PNG.
 
-## 🔍 WhiteList Detection
+Скрины лежат тут:
 
-The scanner automatically detects if a server has whitelist enabled by:
-
-1. Attempting a login handshake with a fake username
-2. Analyzing the disconnect message
-3. Detecting keywords: "whitelist", "not whitelisted", "not allowed"
-
-**Accuracy:** ~95% (depends on server configuration)
-
----
-
-## ⚠️ Important Warnings
-
-### Legal & Ethical Use
-
-- ✅ **DO**: Scan your own servers
-- ✅ **DO**: Test with permission from server owners
-- ✅ **DO**: Use reasonable scan amounts (1-500 ports)
-- ❌ **DON'T**: Scan without authorization
-- ❌ **DON'T**: Use for malicious purposes
-- ❌ **DON'T**: Scan entire port ranges (1-65535)
-
-### Rate Limiting
-
-Aggressive scanning may result in:
-- IP address blocking by firewalls
-- Temporary bans from servers
-- ISP throttling or warnings
-
-**Recommendation:** Use `FAST` or `MEDIUM` mode for public servers.
-
----
-
-## 🐛 Known Issues
-
-- WhiteList detection may fail on heavily customized servers
-- High ping servers (>1000ms) may timeout
-- Some Bedrock Edition servers may not respond correctly
-- Large scans (5000+ ports) may consume significant memory
-
----
-
-## 🔧 Troubleshooting
-
-### "Command not found: javac"
-**Solution:** Install JDK (not just JRE)
-```bash
-java -version
-javac -version
+```text
+screenshots/scan_yyyy-MM-dd_HHmmss/
 ```
 
-### "package org.json does not exist"
-**Solution:** Ensure `lib/json-20231013.jar` exists
+Важно: если бот не смог зайти, скрин не создается. Ошибочные скрины с экраном disconnect специально не сохраняются, чтобы папка не забивалась мусором.
 
-### Program hangs during scan
-**Solution:** Click "Cancel Scan" button or restart application
+## Что нужно для скриншотов
 
----
+Для обычного скана достаточно Java. Для скриншотов дополнительно нужны:
 
-## 🤝 Contributing
+- Node.js 18+ или 20+;
+- Microsoft Edge или Google Chrome;
+- зависимости из `tools/screenshot-bot`.
 
-Contributions are welcome! Please:
+Установка зависимостей:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+```powershell
+cd tools\screenshot-bot
+npm install --omit=dev
+```
 
----
+Если Node.js стоит не в PATH, можно указать путь вручную:
 
-## 📝 Changelog
+```powershell
+$env:MC_SCANNER_NODE="C:\Path\To\node.exe"
+java -jar MCScanner.jar
+```
 
-### v2.0.3 (2026-01-26) True parallel multi-IP scanning, unified results output
-- 🐛 True parallel multi-IP scanning, unified results output!
+Зависимость `canvas` нужна для `prismarine-viewer`. Она тяжелая, но без нее скриншоты мира могут не работать нормально.
 
-### v2.0.2 (2026-01-26) Multi-IP scanning, improved UI, instant cancel
+## Ограничения скриншотов
 
-- ✨ Added multi-IP and IP range scanning support (m28-m15, server1-server10)
-- ✨ Increased font size in IP input field (14pt)
-- 🐛 Added mouse wheel scrolling in IP text area
-- 🐛 Improved results grouping by IP in output file
-- 🐛 Instant scan cancellation (500ms vs 2-3s)
-- 🐛 Better IP range parser: supports numbers anywhere in string
+- online-mode серверы могут кикнуть offline-бота до спавна;
+- whitelist, бан, капча, антибот или лимит подключений тоже могут помешать скрину;
+- серверные resource pack'и не подгружаются, поэтому кастомные блоки иногда выглядят странно;
+- чем больше найдено онлайн-серверов, тем дольше идет этап скриншотов;
+- старые скрины лучше периодически чистить, особенно на сервере с маленьким диском.
 
-### v2.0.1 (2026-01-24)
- What has been fixed:
+## Использование GUI
 
-- 🐛 UUID in the Login Start package - added for versions 1.19+ (protocol 759+)
-- 🐛 Smart protocol definition - from the server version string
-- 🐛 Protocol priority is detectable first, then popular
-- 🐛 Whitelist extended dictionary - added Russian variants of phrases
-- 🐛 Improved diagnostics - detailed logs for debugging
+Поле `Server IPs` принимает:
 
-### v2.0.0 (2026-01-23)
-- ✨ Complete rewrite with clean architecture
-- ✨ Added WhiteList detection
-- ✨ Modern GUI with real-time updates
-- ✨ Multi-threaded scanning engine
-- ✨ Detailed statistics and reporting
-- 🐛 Fixed race conditions
-- 🐛 Fixed resource leaks
-- 🐛 Fixed CountDownLatch bug
+```text
+127.0.0.1
+play.example.org
+192.168.1.10 192.168.1.11 192.168.1.12
+192.168.1.10-192.168.1.20
+```
 
----
+Основные поля:
 
-## 📄 License
+- `Start Port` - первый порт для проверки;
+- `Scan Amount` - сколько портов проверить подряд;
+- `Check Nickname` - ник, которым проверяется вход и whitelist;
+- `Screenshot Wait` - сколько секунд ждать после спавна перед скрином;
+- `Speed` - скорость скана и задержка между задачами;
+- `Monitoring` - повторять скан каждые N минут;
+- `Theme` - dark, light или system.
 
-This project is licensed under the MIT License - see the [LICENSE] file for details.
+После скана можно нажать:
 
----
+- `Open Results` - открыть папку `results`;
+- `Open Screenshots` - открыть папку текущего скана;
+- `Clean Output` - удалить старые результаты и скриншоты.
 
-## 🙏 Acknowledgments
+## Результаты
 
-- **Original Inspiration:** Community need for reliable Minecraft server scanning
-- **Libraries Used:**
-  - [org.json](https://github.com/stleary/JSON-java) - JSON parsing
-  - Java Swing - GUI framework
-- **Testing:** Community contributors
+Файлы сохраняются в папку:
 
----
+```text
+results/
+```
 
-**Made with ❤️ by the Minecraft community**
+На каждый запуск создаются:
+
+```text
+MCScanner_Results_yyyy-MM-dd_HHmmss.txt
+MCScanner_Results_yyyy-MM-dd_HHmmss.csv
+MCScanner_Results_yyyy-MM-dd_HHmmss.json
+```
+
+В CSV/JSON есть поля по серверу, версии, протоколу, ping, MOTD, whitelist и пути к скриншоту, если он был сделан.
+
+## Скорости скана
+
+| Режим | Потоки | Задержка |
+| --- | ---: | ---: |
+| `MEDIUM` | 20 | 500 ms |
+| `FAST` | 50 | 125 ms |
+| `VERY_FAST` | 100 | 50 ms |
+| `DANGEROUS` | 200 | 10 ms |
+
+Для обычного использования лучше начинать с `FAST` или `MEDIUM`. `DANGEROUS` легко упрется в firewall, лимиты сервера или просто забьет слабую машину.
+
+## Деплой на Windows Server
+
+Минимально нужно:
+
+- Java Runtime или JDK;
+- Edge/Chrome, если нужны скрины;
+- Node.js и зависимости screenshot-bot, если запускаешь из исходников.
+
+Если переносишь готовый архив для сервера, там уже должны лежать:
+
+```text
+MCScanner.jar
+run-server.bat
+node/
+tools/screenshot-bot/node_modules/
+```
+
+10 GB свободного места хватит для программы с большим запасом. Главное не копить тысячи PNG: скриншоты весят намного больше, чем результаты скана.
+
+## Репозиторий
+
+В git не кладутся:
+
+- `results/`;
+- `screenshots/`;
+- `node_modules/`;
+- временные build-папки.
+
+`MCScanner.jar` сейчас оставлен в репозитории специально, чтобы можно было быстро скачать и запустить без сборки.
+
+## Важно
+
+Сканируй свои серверы или те, где у тебя есть разрешение. Большие диапазоны и агрессивные режимы могут выглядеть для чужой инфраструктуры как атака, даже если цель была просто проверить порты.
+
+## License
+
+MIT. См. `LICENSE`.
