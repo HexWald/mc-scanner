@@ -8,12 +8,19 @@ opens the viewer in headless Edge/Chrome through `playwright-core`, and saves a 
 ## Direct test
 
 ```powershell
-& "C:\Users\Raisw\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" `
+node `
   tools\screenshot-bot\capture.js `
   --host 127.0.0.1 `
   --port 25565 `
   --username MCScanner `
   --out screenshots\test.png
+```
+
+If Node.js is not in `PATH`, point the app to it before starting the scanner:
+
+```powershell
+$env:MC_SCANNER_NODE="C:\Path\To\node.exe"
+java -jar MCScanner.jar
 ```
 
 ## Notes

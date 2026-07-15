@@ -14,8 +14,6 @@ import java.util.concurrent.TimeUnit;
 public class MinecraftScreenshotService {
     private static final int MAX_PARALLEL_CAPTURES = 2;
     private static final Semaphore CAPTURE_LOCK = new Semaphore(MAX_PARALLEL_CAPTURES);
-    private static final String DEFAULT_NODE_PATH =
-        "C:\\Users\\Raisw\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe";
 
     private final File projectDir;
     private final File scriptFile;
@@ -28,7 +26,7 @@ public class MinecraftScreenshotService {
         this.projectDir = projectDir;
         this.scriptFile = new File(projectDir, "tools/screenshot-bot/capture.js");
         this.outputDir = outputDir;
-        this.nodeExecutable = findNodeExecutable();
+        this.nodeExecutable = findNodeExecutable(projectDir);
         this.waitMs = waitMs;
         this.timeoutMs = Math.max(12000, waitMs + 12000);
     }
@@ -138,18 +136,29 @@ public class MinecraftScreenshotService {
         }
     }
 
-    private static String findNodeExecutable() {
+    private static String findNodeExecutable(File projectDir) {
         String fromEnv = System.getenv("MC_SCANNER_NODE");
-        if (fromEnv != null && new File(fromEnv).isFile()) {
-            return fromEnv;
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            File envFile = new File(fromEnv);
+            return envFile.isFile() ? envFile.getAbsolutePath() : fromEnv;
         }
 
-        File bundledNode = new File(DEFAULT_NODE_PATH);
-        if (bundledNode.isFile()) {
-            return bundledNode.getAbsolutePath();
+        String[] localCandidates = isWindows()
+            ? new String[] {"node/node.exe", "node/bin/node.exe", "node.exe"}
+            : new String[] {"node/bin/node", "node"};
+
+        for (String candidate : localCandidates) {
+            File localNode = new File(projectDir, candidate);
+            if (localNode.isFile()) {
+                return localNode.getAbsolutePath();
+            }
         }
 
         return "node";
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
     private static String buildFileName(ServerInfo serverInfo) {
