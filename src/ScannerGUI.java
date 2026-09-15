@@ -328,67 +328,45 @@ public class ScannerGUI extends JFrame {
         return panel;
     }
 
-    private List<String> parseIPs(String input) {
+    private static List<String> parseIPs(String input) {
         List<String> ips = new ArrayList<>();
         String[] parts = input.trim().split("[\\s,;]+");
         
         for (String part : parts) {
             if (part.isEmpty()) continue;
-            
-            // Check for range format
-            if (part.contains("-")) {
-                String[] range = part.split("-", 2);
-                String start = range[0].trim();
-                String end = range[1].trim();
-                
-                // Try to find numbers anywhere in the string
-                java.util.regex.Pattern numberPattern = java.util.regex.Pattern.compile("(\\d+)");
-                java.util.regex.Matcher startMatcher = numberPattern.matcher(start);
-                java.util.regex.Matcher endMatcher = numberPattern.matcher(end);
-                
-                // Find all numbers in start string
-                List<Integer> startNumbers = new ArrayList<>();
-                List<Integer> startPositions = new ArrayList<>();
-                while (startMatcher.find()) {
-                    startNumbers.add(Integer.parseInt(startMatcher.group()));
-                    startPositions.add(startMatcher.start());
-                }
-                
-                // Find all numbers in end string
-                List<Integer> endNumbers = new ArrayList<>();
-                while (endMatcher.find()) {
-                    endNumbers.add(Integer.parseInt(endMatcher.group()));
-                }
-                
-                // If both have at least one number
-                if (!startNumbers.isEmpty() && !endNumbers.isEmpty()) {
-                    // Use the LAST number from each string
-                    int startNum = startNumbers.get(startNumbers.size() - 1);
-                    int endNum = endNumbers.get(endNumbers.size() - 1);
-                    int lastNumPos = startPositions.get(startPositions.size() - 1);
-                    
-                    // Extract prefix and suffix
-                    String prefix = start.substring(0, lastNumPos);
-                    String suffix = start.substring(lastNumPos + String.valueOf(startNum).length());
-                    
-                    // Generate range
-                    if (startNum <= endNum) {
-                        for (int i = startNum; i <= endNum; i++) {
-                            ips.add(prefix + i + suffix);
-                        }
-                    } else {
-                        // Reverse range
-                        for (int i = startNum; i >= endNum; i--) {
-                            ips.add(prefix + i + suffix);
-                        }
-                    }
-                } else {
-                    // No numbers found, add as-is
-                    ips.add(start);
-                    ips.add(end);
+            int dash = part.indexOf('-');
+            if (dash < 0) {
+                ips.add(part);
+                continue;
+            }
+
+            String start = part.substring(0, dash);
+            String end = part.substring(dash + 1);
+            if (!start.matches("(\\d{1,3}\\.){3}\\d{1,3}")) {
+                ips.add(part);
+                continue;
+            }
+
+            int lastDot = start.lastIndexOf('.');
+            String prefix = start.substring(0, lastDot + 1);
+            if (end.startsWith(prefix)) {
+                end = end.substring(prefix.length());
+            }
+            if (!end.matches("\\d{1,3}")) {
+                ips.add(part);
+                continue;
+            }
+
+            int first = Integer.parseInt(start.substring(lastDot + 1));
+            int last = Integer.parseInt(end);
+            if (first <= last) {
+                for (int i = first; i <= last; i++) {
+                    ips.add(prefix + i);
                 }
             } else {
-                ips.add(part);
+                for (int i = first; i >= last; i--) {
+                    ips.add(prefix + i);
+                }
             }
         }
         
