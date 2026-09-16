@@ -12,29 +12,16 @@ public class ServerInfo {
     private final boolean hasWhitelist;
     private final long ping;
     private final int protocolVersion;
-    private final String screenshotPath;
     
     public ServerInfo(String ip, int port, boolean online, String version,
                       int playersOnline, int playersMax, String motd,
                       boolean hasWhitelist, long ping) {
-        this(ip, port, online, version, playersOnline, playersMax, motd, hasWhitelist, ping, -1, "");
+        this(ip, port, online, version, playersOnline, playersMax, motd, hasWhitelist, ping, -1);
     }
 
     public ServerInfo(String ip, int port, boolean online, String version,
                       int playersOnline, int playersMax, String motd,
                       boolean hasWhitelist, long ping, int protocolVersion) {
-        this(ip, port, online, version, playersOnline, playersMax, motd, hasWhitelist, ping, protocolVersion, "");
-    }
-
-    public ServerInfo(String ip, int port, boolean online, String version,
-                      int playersOnline, int playersMax, String motd,
-                      boolean hasWhitelist, long ping, String screenshotPath) {
-        this(ip, port, online, version, playersOnline, playersMax, motd, hasWhitelist, ping, -1, screenshotPath);
-    }
-
-    public ServerInfo(String ip, int port, boolean online, String version,
-                      int playersOnline, int playersMax, String motd,
-                      boolean hasWhitelist, long ping, int protocolVersion, String screenshotPath) {
         this.ip = ip;
         this.port = port;
         this.online = online;
@@ -45,7 +32,6 @@ public class ServerInfo {
         this.hasWhitelist = hasWhitelist;
         this.ping = ping;
         this.protocolVersion = protocolVersion;
-        this.screenshotPath = screenshotPath != null ? screenshotPath : "";
     }
     
     public ServerInfo(String ip, int port) {
@@ -63,12 +49,6 @@ public class ServerInfo {
     public boolean hasWhitelist() { return hasWhitelist; }
     public long getPing() { return ping; }
     public int getProtocolVersion() { return protocolVersion; }
-    public String getScreenshotPath() { return screenshotPath; }
-
-    public ServerInfo withScreenshotPath(String screenshotPath) {
-        return new ServerInfo(ip, port, online, version, playersOnline, playersMax,
-            motd, hasWhitelist, ping, protocolVersion, screenshotPath);
-    }
     
     @Override
     public String toString() {
@@ -78,11 +58,9 @@ public class ServerInfo {
         String cleanMotd = getDisplayMotd();
         if (cleanMotd.length() > 60) cleanMotd = cleanMotd.substring(0, 57) + "...";
         
-        String screenshotInfo = screenshotPath.isEmpty() ? "" : " | Screenshot: " + screenshotPath;
-
-        return String.format("%s:%-5d | %-15s | Players: %3d/%-3d | Ping: %4dms | WL: %-3s | %s%s",
+        return String.format("%s:%-5d | %-15s | Players: %3d/%-3d | Ping: %4dms | WL: %-3s | %s",
             ip, port, version, playersOnline, playersMax, ping,
-            hasWhitelist ? "YES" : "NO", cleanMotd, screenshotInfo);
+            hasWhitelist ? "YES" : "NO", cleanMotd);
     }
 
     private static String cleanMotd(String value) {

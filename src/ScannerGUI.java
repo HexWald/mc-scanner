@@ -29,15 +29,12 @@ public class ScannerGUI extends JFrame {
     private final JTextField portField;
     private final JTextField amountField;
     private final JTextField usernameField;
-    private final JCheckBox screenshotsCheckBox;
-    private final JTextField screenshotWaitField;
     private final JCheckBox monitoringCheckBox;
     private final JTextField monitoringIntervalField;
     private final JComboBox<ThemeMode> themeCombo;
     private final JComboBox<ScannerService.ScanSpeed> speedCombo;
     private final JButton scanButton;
     private final JButton openResultsButton;
-    private final JButton openScreenshotsButton;
     private final JButton cleanOutputButton;
     private final JProgressBar progressBar;
     private final JLabel statusLabel;
@@ -48,7 +45,6 @@ public class ScannerGUI extends JFrame {
     private volatile Thread workerThread;
     private volatile boolean stopRequested;
     private File lastResultsDir;
-    private File lastScreenshotsDir;
 
     private enum ThemeMode {
         DARK("Dark"),
@@ -119,7 +115,7 @@ public class ScannerGUI extends JFrame {
         ipBlock.add(formatLabel, BorderLayout.SOUTH);
         setupContent.add(ipBlock, BorderLayout.NORTH);
 
-        JPanel fieldsPanel = new JPanel(new GridLayout(4, 2, 18, 10));
+        JPanel fieldsPanel = new JPanel(new GridLayout(3, 2, 18, 10));
         fieldsPanel.setOpaque(false);
 
         portField = new JTextField("25565", 10);
@@ -134,10 +130,6 @@ public class ScannerGUI extends JFrame {
         usernameField.setFont(new Font(FONT, Font.PLAIN, 13));
         fieldsPanel.add(fieldBlock("Check Nickname", usernameField));
 
-        screenshotWaitField = new JTextField("3", 10);
-        screenshotWaitField.setFont(new Font(FONT, Font.PLAIN, 13));
-        fieldsPanel.add(fieldBlock("Screenshot Wait", screenshotWaitField));
-
         speedCombo = new ModernComboBox<>(ScannerService.ScanSpeed.values());
         speedCombo.setSelectedItem(ScannerService.ScanSpeed.FAST);
         fieldsPanel.add(fieldBlock("Speed", speedCombo));
@@ -149,11 +141,6 @@ public class ScannerGUI extends JFrame {
             applyThemeMode(mode != null ? mode : ThemeMode.DARK);
         });
         fieldsPanel.add(fieldBlock("Theme", themeCombo));
-
-        screenshotsCheckBox = new JCheckBox("Always save");
-        screenshotsCheckBox.setSelected(true);
-        screenshotsCheckBox.addActionListener(e -> screenshotsCheckBox.setSelected(true));
-        fieldsPanel.add(checkBlock("Screenshots", screenshotsCheckBox));
 
         monitoringCheckBox = new JCheckBox("Repeat scans");
         monitoringCheckBox.addActionListener(e -> updateMonitoringIntervalEnabled());
@@ -263,33 +250,24 @@ public class ScannerGUI extends JFrame {
         buttonGbc.gridx = 2;
         buttonPanel.add(openResultsButton, buttonGbc);
 
-        openScreenshotsButton = new ModernButton("Open Screenshots");
-        openScreenshotsButton.setPreferredSize(new Dimension(168, 40));
-        openScreenshotsButton.setEnabled(false);
-        openScreenshotsButton.addActionListener(e -> openDirectory(lastScreenshotsDir));
-        buttonGbc.gridx = 3;
-        buttonPanel.add(openScreenshotsButton, buttonGbc);
-
         cleanOutputButton = new ModernButton("Clean Output");
         cleanOutputButton.setPreferredSize(new Dimension(144, 40));
         cleanOutputButton.addActionListener(e -> cleanOutput());
-        buttonGbc.gridx = 4;
+        buttonGbc.gridx = 3;
         buttonPanel.add(cleanOutputButton, buttonGbc);
 
-        buttonGbc.gridx = 5;
+        buttonGbc.gridx = 4;
         buttonGbc.weightx = 1.0;
         buttonPanel.add(Box.createHorizontalGlue(), buttonGbc);
         
         mainPanel.add(buttonPanel, BorderLayout.SOUTH);
         
         lastResultsDir = AppPaths.resultsDir();
-        lastScreenshotsDir = AppPaths.screenshotsDir();
         stopRequested = false;
 
         applyModernTheme(mainPanel);
         stylePrimaryButton(scanButton);
         styleSecondaryButton(openResultsButton);
-        styleSecondaryButton(openScreenshotsButton);
         styleDangerButton(cleanOutputButton);
 
         add(mainPanel);
@@ -314,17 +292,6 @@ public class ScannerGUI extends JFrame {
         input.setMinimumSize(new Dimension(150, 34));
         panel.add(label, BorderLayout.NORTH);
         panel.add(input, BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JPanel checkBlock(String labelText, JCheckBox checkBox) {
-        JPanel panel = new JPanel(new BorderLayout(0, 6));
-        panel.setOpaque(false);
-        JLabel label = new JLabel(labelText + ":");
-        checkBox.setPreferredSize(new Dimension(190, 36));
-        checkBox.setMinimumSize(new Dimension(150, 34));
-        panel.add(label, BorderLayout.NORTH);
-        panel.add(checkBox, BorderLayout.CENTER);
         return panel;
     }
 
@@ -428,20 +395,6 @@ public class ScannerGUI extends JFrame {
             return;
         }
 
-        boolean screenshotsEnabled = true;
-        int screenshotWaitMs;
-        try {
-            int screenshotWaitSeconds = Integer.parseInt(screenshotWaitField.getText().trim());
-            if (screenshotWaitSeconds < 1 || screenshotWaitSeconds > 30) {
-                showError("Screenshot wait must be between 1 and 30 seconds");
-                return;
-            }
-            screenshotWaitMs = screenshotWaitSeconds * 1000;
-        } catch (NumberFormatException e) {
-            showError("Invalid screenshot wait");
-            return;
-        }
-
         boolean monitoringEnabled = monitoringCheckBox.isSelected();
         int monitoringIntervalMinutes = 0;
         if (monitoringEnabled) {
@@ -473,13 +426,12 @@ public class ScannerGUI extends JFrame {
         final int monitoringInterval = monitoringIntervalMinutes;
 
         workerThread = new Thread(() -> runScanLoop(ips, port, amount, speed, checkUsername,
-            screenshotsEnabled, screenshotWaitMs, monitoringEnabled, monitoringInterval), "ScannerThread");
+            monitoringEnabled, monitoringInterval), "ScannerThread");
         workerThread.start();
     }
 
     private void runScanLoop(List<String> ips, int port, int amount, ScannerService.ScanSpeed speed,
-                             String checkUsername, boolean screenshotsEnabled, int screenshotWaitMs,
-                             boolean monitoringEnabled, int monitoringIntervalMinutes) {
+                             String checkUsername, boolean monitoringEnabled, int monitoringIntervalMinutes) {
         Map<String, ServerInfo> previousResults = null;
         int runNumber = 1;
 
@@ -494,8 +446,7 @@ public class ScannerGUI extends JFrame {
                         : "Scan started...");
                 });
 
-                ScannerService scanner = new ScannerService(ips, port, amount, speed,
-                    checkUsername, screenshotsEnabled, screenshotWaitMs);
+                ScannerService scanner = new ScannerService(ips, port, amount, speed, checkUsername);
                 currentScanner = scanner;
 
                 scanner.scan(progress -> updateProgress(progress, monitoringEnabled, currentRun));
@@ -522,13 +473,11 @@ public class ScannerGUI extends JFrame {
                 String changeText = buildChangeSummary(previousResults, currentResults, currentRun, monitoringEnabled);
                 previousResults = toServerMap(currentResults);
 
-                File screenshotFolder = scanner.getScreenshotOutputDir();
                 lastResultsDir = AppPaths.resultsDir();
-                lastScreenshotsDir = screenshotFolder;
                 currentScanner = null;
 
-                showRunComplete(ips, txtFile, csvFile, jsonFile, screenshotFolder,
-                    changeText, monitoringEnabled, currentRun);
+                showRunComplete(ips, txtFile, csvFile, jsonFile, changeText,
+                    monitoringEnabled, currentRun);
 
                 if (!monitoringEnabled) {
                     break;
@@ -572,14 +521,6 @@ public class ScannerGUI extends JFrame {
             statsLabel.setText(String.format("Online: %d | WhiteList: %d",
                 progress.getOnlineTotal(), progress.getWhitelistTotal()));
 
-            if (progress.isScreenshotStage()) {
-                progressBar.setString(String.format("%sScreenshots %d / %d", prefix,
-                    progress.getScreenshotsDone(), progress.getScreenshotsTotal()));
-                statusLabel.setText(String.format("%sSaving screenshots: %d / %d", prefix,
-                    progress.getScreenshotsDone(), progress.getScreenshotsTotal()));
-                return;
-            }
-
             progressBar.setString(prefix + "Scan " + progress.getScanned() + " / " + progress.getTotal());
 
             ServerInfo info = progress.getLastResult();
@@ -594,7 +535,7 @@ public class ScannerGUI extends JFrame {
     }
 
     private void showRunComplete(List<String> ips, File txtFile, File csvFile, File jsonFile,
-                                 File screenshotFolder, String changeText,
+                                 String changeText,
                                  boolean monitoringEnabled, int runNumber) {
         SwingUtilities.invokeLater(() -> {
             progressBar.setValue(100);
@@ -604,15 +545,13 @@ public class ScannerGUI extends JFrame {
                 : "Results saved successfully!");
             changesArea.setText(changeText);
             openResultsButton.setEnabled(true);
-            openScreenshotsButton.setEnabled(true);
 
             if (!monitoringEnabled) {
                 JOptionPane.showMessageDialog(this,
                     "Scan completed!\n\nScanned " + ips.size() + " IP(s)"
                         + "\nTXT:\n" + txtFile.getAbsolutePath()
                         + "\n\nCSV:\n" + csvFile.getAbsolutePath()
-                        + "\n\nJSON:\n" + jsonFile.getAbsolutePath()
-                        + "\n\nScreenshots folder:\n" + screenshotFolder.getAbsolutePath(),
+                        + "\n\nJSON:\n" + jsonFile.getAbsolutePath(),
                     "Scan Complete",
                     JOptionPane.INFORMATION_MESSAGE);
             }
@@ -772,8 +711,6 @@ public class ScannerGUI extends JFrame {
         portField.setEnabled(enabled);
         amountField.setEnabled(enabled);
         usernameField.setEnabled(enabled);
-        screenshotsCheckBox.setEnabled(true);
-        screenshotWaitField.setEnabled(enabled);
         monitoringCheckBox.setEnabled(enabled);
         monitoringIntervalField.setEnabled(enabled && monitoringCheckBox.isSelected());
         speedCombo.setEnabled(enabled);
@@ -828,7 +765,6 @@ public class ScannerGUI extends JFrame {
     private void refreshButtonStyles() {
         stylePrimaryButton(scanButton);
         styleSecondaryButton(openResultsButton);
-        styleSecondaryButton(openScreenshotsButton);
         styleDangerButton(cleanOutputButton);
     }
 
@@ -856,10 +792,8 @@ public class ScannerGUI extends JFrame {
         }
 
         File resultsDir = AppPaths.resultsDir();
-        File screenshotsDir = AppPaths.screenshotsDir();
         int answer = JOptionPane.showConfirmDialog(this,
-            "Delete all files from:\n" + resultsDir.getAbsolutePath()
-                + "\n\nand:\n" + screenshotsDir.getAbsolutePath(),
+            "Delete all files from:\n" + resultsDir.getAbsolutePath(),
             "Clean Output",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE);
@@ -869,11 +803,9 @@ public class ScannerGUI extends JFrame {
 
         try {
             deleteContents(resultsDir);
-            deleteContents(screenshotsDir);
             changesArea.setText("Output cleaned.");
-            statusLabel.setText("Results and screenshots cleaned");
+            statusLabel.setText("Results cleaned");
             openResultsButton.setEnabled(false);
-            openScreenshotsButton.setEnabled(false);
         } catch (IOException e) {
             showError("Clean error: " + e.getMessage());
         }

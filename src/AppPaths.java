@@ -12,10 +12,6 @@ public class AppPaths {
         return ensureDir(new File(BASE_DIR, "results"));
     }
 
-    public static File screenshotsDir() {
-        return ensureDir(new File(BASE_DIR, "screenshots"));
-    }
-
     private static File resolveBaseDir() {
         File codeDir = getCodeDir();
         if (codeDir != null) {

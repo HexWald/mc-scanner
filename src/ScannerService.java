@@ -14,15 +14,8 @@ public class ScannerService {
     private final int limit;
     private final ScanSpeed scanSpeed;
     private final String checkUsername;
-    private final boolean screenshotsEnabled;
-    private final int screenshotWaitMs;
-    private final MinecraftScreenshotService screenshotService;
-    private final File screenshotOutputDir;
     private final ExecutorService executor;
-    private final ExecutorService screenshotExecutor;
-    private final CompletionService<Void> screenshotCompletionService;
     private final ConcurrentLinkedQueue<ServerInfo> results;
-    private final ConcurrentLinkedQueue<Future<?>> screenshotFutures;
     private final AtomicInteger scannedCount;
     private final AtomicInteger onlineCount;
     private final AtomicInteger whitelistCount;
@@ -51,11 +44,6 @@ public class ScannerService {
     }
 
     public ScannerService(List<String> targetIPs, int startPort, int limit, ScanSpeed scanSpeed, String checkUsername) {
-        this(targetIPs, startPort, limit, scanSpeed, checkUsername, false, 8000);
-    }
-
-    public ScannerService(List<String> targetIPs, int startPort, int limit, ScanSpeed scanSpeed,
-                          String checkUsername, boolean screenshotsEnabled, int screenshotWaitMs) {
         if (targetIPs == null || targetIPs.isEmpty()) {
             throw new IllegalArgumentException("At least one target IP is required");
         }
@@ -74,30 +62,17 @@ public class ScannerService {
         if (checkUsername == null || !checkUsername.matches("[A-Za-z0-9_]{3,16}")) {
             throw new IllegalArgumentException("Check nickname must be 3-16 characters: A-Z, 0-9 or _");
         }
-        if (screenshotWaitMs < 1000 || screenshotWaitMs > 30000) {
-            throw new IllegalArgumentException("Screenshot wait must be between 1000 and 30000 ms");
-        }
-
         this.targetIPs = targetIPs;
         this.startPort = startPort;
         this.limit = limit;
         this.scanSpeed = scanSpeed;
         this.checkUsername = checkUsername;
-        this.screenshotsEnabled = true;
-        this.screenshotWaitMs = screenshotWaitMs;
-        String scanRunId = new SimpleDateFormat("yyyy-MM-dd_HHmmss").format(new Date());
-        this.screenshotOutputDir = new File(AppPaths.screenshotsDir(), "scan_" + scanRunId);
-        this.screenshotOutputDir.mkdirs();
-        this.screenshotService = new MinecraftScreenshotService(AppPaths.baseDir(), screenshotOutputDir, screenshotWaitMs);
         
         // Increase thread pool for multiple IPs
         int threadPoolSize = scanSpeed.threadPoolSize * Math.min(targetIPs.size(), 4);
         this.executor = Executors.newFixedThreadPool(threadPoolSize);
-        this.screenshotExecutor = Executors.newFixedThreadPool(2);
-        this.screenshotCompletionService = new ExecutorCompletionService<>(screenshotExecutor);
         
         this.results = new ConcurrentLinkedQueue<>();
-        this.screenshotFutures = new ConcurrentLinkedQueue<>();
         this.scannedCount = new AtomicInteger(0);
         this.onlineCount = new AtomicInteger(0);
         this.whitelistCount = new AtomicInteger(0);
@@ -133,12 +108,7 @@ public class ScannerService {
                         }
                         
                         if (info.isOnline()) {
-                            if (screenshotsEnabled && screenshotService != null) {
-                                queueScreenshotCapture(info);
-                            } else {
-                                results.add(info);
-                            }
-
+                            results.add(info);
                             onlineCount.incrementAndGet();
                             if (info.hasWhitelist()) {
                                 whitelistCount.incrementAndGet();
@@ -171,70 +141,9 @@ public class ScannerService {
         
         executor.shutdownNow();
         executor.awaitTermination(1, TimeUnit.SECONDS);
-        if (!cancelled) {
-            waitForScreenshotCaptures(progressCallback, totalScans);
-        }
-        screenshotExecutor.shutdownNow();
-        screenshotExecutor.awaitTermination(1, TimeUnit.SECONDS);
         
         long totalTime = System.currentTimeMillis() - startTime;
         System.out.println("Scan completed in " + totalTime + "ms");
-    }
-
-    private void queueScreenshotCapture(ServerInfo info) {
-        Future<?> future = screenshotCompletionService.submit(() -> {
-            if (cancelled) {
-                return null;
-            }
-
-            ServerInfo result = info;
-            String screenshotPath = screenshotService.capture(info, checkUsername);
-            if (!screenshotPath.isEmpty()) {
-                result = info.withScreenshotPath(screenshotPath);
-            }
-            results.add(result);
-            return null;
-        });
-        screenshotFutures.add(future);
-    }
-
-    private void waitForScreenshotCaptures(Consumer<ScanProgress> progressCallback, int totalScans) throws InterruptedException {
-        int screenshotTotal = screenshotFutures.size();
-        if (screenshotTotal == 0) {
-            return;
-        }
-
-        int completed = 0;
-        notifyScreenshotProgress(progressCallback, completed, screenshotTotal, totalScans);
-
-        for (int i = 0; i < screenshotTotal; i++) {
-            if (cancelled) {
-                break;
-            }
-
-            try {
-                Future<Void> future = screenshotCompletionService.take();
-                future.get();
-            } catch (ExecutionException e) {
-                Throwable cause = e.getCause();
-                System.err.println("[Screenshot] Capture worker failed: " + (cause != null ? cause.getMessage() : e.getMessage()));
-            } catch (CancellationException ignored) {
-                // Scanner is stopping.
-            }
-
-            completed++;
-            notifyScreenshotProgress(progressCallback, completed, screenshotTotal, totalScans);
-        }
-    }
-
-    private void notifyScreenshotProgress(Consumer<ScanProgress> progressCallback,
-                                          int completed, int total, int totalScans) {
-        if (progressCallback == null || cancelled) {
-            return;
-        }
-
-        progressCallback.accept(ScanProgress.screenshots(
-            scannedCount.get(), totalScans, completed, total, onlineCount.get(), whitelistCount.get()));
     }
 
     private void applyWorkerDelay() {
@@ -252,11 +161,6 @@ public class ScannerService {
     public void cancel() {
         cancelled = true;
         executor.shutdownNow();
-        screenshotExecutor.shutdownNow();
-    }
-
-    public File getScreenshotOutputDir() {
-        return screenshotOutputDir;
     }
 
     public List<ServerInfo> getResultsSnapshot() {
@@ -285,8 +189,6 @@ public class ScannerService {
             writer.println("Port Range:   " + startPort + " - " + (startPort + limit - 1));
             writer.println("Scan Speed:   " + scanSpeed);
             writer.println("Check Nick:   " + checkUsername);
-            writer.println("Screenshots:  " + (screenshotsEnabled ? "Enabled" : "Disabled"));
-            writer.println("Screenshot Dir: " + screenshotOutputDir.getAbsolutePath());
             writer.println(repeat("=", 100));
             writer.println();
             
@@ -362,7 +264,7 @@ public class ScannerService {
         try (PrintWriter writer = new PrintWriter(new BufferedWriter(
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)), true)) {
             writer.write('\ufeff');
-            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,whitelist,motd,screenshotPath");
+            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,whitelist,motd");
             for (ServerInfo info : getResultsSnapshot()) {
                 writer.println(String.join(",",
                     csv(info.getIp()),
@@ -373,8 +275,7 @@ public class ScannerService {
                     String.valueOf(info.getPlayersMax()),
                     String.valueOf(info.getPing()),
                     csv(info.hasWhitelist() ? "YES" : "NO"),
-                    csv(info.getDisplayMotd()),
-                    csv(info.getScreenshotPath())
+                    csv(info.getDisplayMotd())
                 ));
             }
         }
@@ -390,8 +291,6 @@ public class ScannerService {
         root.put("endPort", startPort + limit - 1);
         root.put("scanSpeed", String.valueOf(scanSpeed));
         root.put("checkNick", checkUsername);
-        root.put("screenshots", screenshotsEnabled);
-        root.put("screenshotDir", screenshotOutputDir.getAbsolutePath());
 
         JSONArray servers = new JSONArray();
         for (ServerInfo info : getResultsSnapshot()) {
@@ -405,7 +304,6 @@ public class ScannerService {
             server.put("pingMs", info.getPing());
             server.put("whitelist", info.hasWhitelist());
             server.put("motd", info.getDisplayMotd());
-            server.put("screenshotPath", info.getScreenshotPath());
             servers.put(server);
         }
         root.put("servers", servers);
@@ -439,59 +337,31 @@ public class ScannerService {
     }
     
     public static class ScanProgress {
-        public enum Stage {
-            SCANNING,
-            SCREENSHOTS
-        }
-
-        private final Stage stage;
         private final int scanned;
         private final int total;
         private final ServerInfo lastResult;
         private final int onlineTotal;
         private final int whitelistTotal;
-        private final int screenshotsDone;
-        private final int screenshotsTotal;
         
         public ScanProgress(int scanned, int total, ServerInfo lastResult, int onlineTotal, int whitelistTotal) {
-            this(Stage.SCANNING, scanned, total, lastResult, onlineTotal, whitelistTotal, 0, 0);
-        }
-
-        private ScanProgress(Stage stage, int scanned, int total, ServerInfo lastResult,
-                             int onlineTotal, int whitelistTotal, int screenshotsDone, int screenshotsTotal) {
-            this.stage = stage;
             this.scanned = scanned;
             this.total = total;
             this.lastResult = lastResult;
             this.onlineTotal = onlineTotal;
             this.whitelistTotal = whitelistTotal;
-            this.screenshotsDone = screenshotsDone;
-            this.screenshotsTotal = screenshotsTotal;
-        }
-
-        public static ScanProgress screenshots(int scanned, int total, int screenshotsDone,
-                                               int screenshotsTotal, int onlineTotal, int whitelistTotal) {
-            return new ScanProgress(Stage.SCREENSHOTS, scanned, total, null,
-                onlineTotal, whitelistTotal, screenshotsDone, screenshotsTotal);
         }
         
-        public Stage getStage() { return stage; }
-        public boolean isScreenshotStage() { return stage == Stage.SCREENSHOTS; }
         public int getScanned() { return scanned; }
         public int getTotal() { return total; }
         public ServerInfo getLastResult() { return lastResult; }
         public int getOnlineTotal() { return onlineTotal; }
         public int getWhitelistTotal() { return whitelistTotal; }
-        public int getScreenshotsDone() { return screenshotsDone; }
-        public int getScreenshotsTotal() { return screenshotsTotal; }
 
         public int getProgress() {
-            int current = isScreenshotStage() ? screenshotsDone : scanned;
-            int max = isScreenshotStage() ? screenshotsTotal : total;
-            if (max <= 0) {
+            if (total <= 0) {
                 return 0;
             }
-            return (int) ((current / (double) max) * 100);
+            return (int) ((scanned / (double) total) * 100);
         }
     }
 }

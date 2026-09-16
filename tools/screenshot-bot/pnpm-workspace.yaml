@@ -1,4 +1,0 @@
-allowBuilds:
-  canvas: true
-ignoredBuiltDependencies:
-  - gl
