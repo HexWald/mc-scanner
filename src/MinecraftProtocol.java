@@ -2,9 +2,16 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
+import java.util.zip.DataFormatException;
+import java.util.zip.Inflater;
 import org.json.JSONObject;
 import org.json.JSONException;
 import org.json.JSONArray;
+import org.json.JSONTokener;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -227,9 +234,10 @@ public class MinecraftProtocol {
                 }
             }
             
-            boolean hasWhitelist = checkWhitelistSmart(ip, port, version, protocolVersion, checkUsername);
+            LoginCheckResult loginCheck = checkJoinSmart(ip, port, version, protocolVersion, checkUsername);
             
-            return new ServerInfo(ip, port, true, version, online, max, motd, hasWhitelist, ping, protocolVersion);
+            return new ServerInfo(ip, port, true, version, online, max, motd, ping, protocolVersion,
+                loginCheck.joinStatus, loginCheck.reason);
             
         } catch (JSONException e) {
             return new ServerInfo(ip, port, true, "Parse Error", 0, 0, "", false, ping);
@@ -262,79 +270,39 @@ public class MinecraftProtocol {
         return text.toString();
     }
     
-    private static boolean checkWhitelistSmart(String ip, int port, String version, int reportedProtocol, String checkUsername) {
-        System.out.println("\n" + repeat("=", 70));
-        System.out.println("[WhiteList Check] Starting for: " + ip + ":" + port);
-        System.out.println("[WhiteList Check] Server version: " + version);
-        System.out.println("[WhiteList Check] Reported protocol: " + reportedProtocol);
-        System.out.println("[WhiteList Check] Check nickname: " + checkUsername);
-        System.out.println(repeat("=", 70));
-        
-        // Try to get protocol from reported version
+    private static LoginCheckResult checkJoinSmart(String ip, int port, String version,
+                                                   int reportedProtocol, String checkUsername) {
+        Set<Integer> candidates = new LinkedHashSet<>();
         Integer detectedProtocol = getProtocolFromVersion(version);
-        
-        if (detectedProtocol != null) {
-            System.out.println("[WhiteList Check] Detected protocol from version: " + detectedProtocol);
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, detectedProtocol);
-            if (result.status == CheckStatus.SUCCESS) {
-                System.out.println("[WhiteList Check] ✓ SUCCESS with detected protocol!");
-                System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
-                return result.hasWhitelist;
-            }
-        }
-        
-        // If we have reported protocol from server, try it
         if (reportedProtocol > 0) {
-            System.out.println("[WhiteList Check] Trying reported protocol: " + reportedProtocol);
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, reportedProtocol);
-            if (result.status == CheckStatus.SUCCESS) {
-                System.out.println("[WhiteList Check] ✓ SUCCESS with reported protocol!");
-                System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
-                return result.hasWhitelist;
+            candidates.add(reportedProtocol);
+        }
+        if (detectedProtocol != null) {
+            candidates.add(detectedProtocol);
+        }
+        if (candidates.isEmpty()) {
+            int[] fallbackProtocols = {774, 772, 768, 767, 765, 763, 760, 758, 754, 340, 47, 5};
+            for (int protocol : fallbackProtocols) {
+                candidates.add(protocol);
             }
         }
-        
-        // Fallback: try priority protocols
-        int[] priorityProtocols = {767, 765, 763, 762, 761, 760, 758, 754, 47};
-        System.out.println("[WhiteList Check] Trying priority protocols...");
-        
-        for (int protocol : priorityProtocols) {
-            if (protocol == reportedProtocol || (detectedProtocol != null && protocol == detectedProtocol)) {
-                continue; // Already tried
+
+        LoginCheckResult bestResult = LoginCheckResult.unknown("");
+        for (int protocol : candidates) {
+            LoginCheckResult result = checkLogin(ip, port, checkUsername, protocol);
+            if (result.state == CheckState.MATCHED) {
+                System.out.println("[Join Check] " + ip + ":" + port + " -> "
+                    + result.joinStatus.getLabel()
+                    + (result.reason.isEmpty() ? "" : " (" + result.reason + ")"));
+                return result;
             }
-            
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, protocol);
-            
-            if (result.status == CheckStatus.SUCCESS) {
-                System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
-                return result.hasWhitelist;
+            if (result.state == CheckState.PROTOCOL_MISMATCH || bestResult.reason.isEmpty()) {
+                bestResult = result;
             }
         }
-        
-        // Last resort: try all remaining protocols
-        System.out.println("[WhiteList Check] Trying all remaining protocols...");
-        for (int protocol : PROTOCOL_VERSIONS) {
-            boolean alreadyTried = false;
-            for (int p : priorityProtocols) {
-                if (p == protocol) {
-                    alreadyTried = true;
-                    break;
-                }
-            }
-            if (alreadyTried || protocol == reportedProtocol || 
-                (detectedProtocol != null && protocol == detectedProtocol)) {
-                continue;
-            }
-            
-            WhitelistCheckResult result = checkByFakeLogin(ip, port, checkUsername, protocol);
-            if (result.status == CheckStatus.SUCCESS) {
-                System.out.println("[WhiteList Check] ✓ RESULT: " + (result.hasWhitelist ? "HAS WHITELIST" : "NO WHITELIST"));
-                return result.hasWhitelist;
-            }
-        }
-        
-        System.out.println("[WhiteList Check] All protocols failed or were inconclusive - could not confirm whitelist");
-        return false;
+
+        System.out.println("[Join Check] " + ip + ":" + port + " -> Unknown");
+        return bestResult;
     }
 
     public static String getClientVersionName(String reportedVersion, int protocolVersion) {
@@ -383,228 +351,316 @@ public class MinecraftProtocol {
         return null;
     }
     
-    private enum CheckStatus {
-        SUCCESS,
+    private enum CheckState {
+        MATCHED,
         PROTOCOL_MISMATCH,
-        INCONCLUSIVE,
         ERROR
     }
-    
-    private static class WhitelistCheckResult {
-        CheckStatus status;
-        boolean hasWhitelist;
-        
-        WhitelistCheckResult(CheckStatus status, boolean hasWhitelist) {
-            this.status = status;
-            this.hasWhitelist = hasWhitelist;
+
+    private static class LoginCheckResult {
+        final CheckState state;
+        final JoinStatus joinStatus;
+        final String reason;
+
+        LoginCheckResult(CheckState state, JoinStatus joinStatus, String reason) {
+            this.state = state;
+            this.joinStatus = joinStatus;
+            this.reason = reason != null ? reason : "";
+        }
+
+        static LoginCheckResult matched(JoinStatus status, String reason) {
+            return new LoginCheckResult(CheckState.MATCHED, status, reason);
+        }
+
+        static LoginCheckResult unknown(String reason) {
+            return new LoginCheckResult(CheckState.ERROR, JoinStatus.UNKNOWN, reason);
         }
     }
-    
-    private static WhitelistCheckResult checkByFakeLogin(String ip, int port, String username, int protocolVersion) {
-        System.out.println("[WhiteList Check] Attempting login with protocol " + protocolVersion);
-        
+
+    private static LoginCheckResult checkLogin(String ip, int port, String username, int protocolVersion) {
         try (Socket socket = new Socket()) {
-            socket.setSoTimeout(3000);
+            socket.setSoTimeout(2500);
             socket.connect(new InetSocketAddress(ip, port), 3000);
-            
+
             try (DataOutputStream out = new DataOutputStream(socket.getOutputStream());
                  DataInputStream in = new DataInputStream(socket.getInputStream())) {
-                
-                // Handshake
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                DataOutputStream handshake = new DataOutputStream(buffer);
-                handshake.writeByte(0);
-                writeVarInt(handshake, protocolVersion);
-                writeString(handshake, ip);
-                handshake.writeShort(port);
-                writeVarInt(handshake, 2); // Login state
-                
-                byte[] packet = buffer.toByteArray();
-                writeVarInt(out, packet.length);
-                out.write(packet);
-                out.flush();
-                
-                // Login Start packet format varies by protocol version:
-                // < 759 (before 1.19): Name only
-                // 759-760 (1.19-1.19.2): Name + Player UUID
-                // >= 761 (1.19.3+): Name + Player UUID
-                buffer = new ByteArrayOutputStream();
-                DataOutputStream login = new DataOutputStream(buffer);
-                login.writeByte(0); // Packet ID = 0x00 (Login Start)
-                
-                writeString(login, username);
-                
-                // Add UUID for 1.19+ (protocol 759+)
-                if (protocolVersion >= 759) {
-                    // Player UUID (most significant bits + least significant bits)
-                    // Using 0 for both parts (null UUID)
-                    login.writeLong(0L);  // Most significant bits
-                    login.writeLong(0L);  // Least significant bits
-                }
-                
-                packet = buffer.toByteArray();
-                writeVarInt(out, packet.length);
-                out.write(packet);
-                out.flush();
-                
-                // Read response
-                socket.setSoTimeout(2000);
-                
-                try {
-                    int length = readVarInt(in);
-                    if (length <= 0 || length > 32767) {
-                        System.out.println("[WhiteList Check] Invalid packet length: " + length);
-                        return new WhitelistCheckResult(CheckStatus.ERROR, false);
-                    }
-                    
-                    int packetId = readVarInt(in);
-                    System.out.println("[WhiteList Check] Packet ID: 0x" + String.format("%02X", packetId) + 
-                                     " | Protocol: " + protocolVersion);
-                    
-                    if (packetId == 0x00) { // Disconnect
-                        int msgLength = readVarInt(in);
-                        if (msgLength > 0 && msgLength < 32768) {
-                            byte[] msgBytes = new byte[msgLength];
-                            in.readFully(msgBytes);
-                            String message = new String(msgBytes, StandardCharsets.UTF_8);
-                            
-                            System.out.println("[WhiteList Check] Message: " + message);
-                            
-                            // Check for version mismatch
-                            if (isVersionMismatch(message)) {
-                                System.out.println("[WhiteList Check] → Version mismatch");
-                                return new WhitelistCheckResult(CheckStatus.PROTOCOL_MISMATCH, false);
-                            }
-                            
-                            // Check for whitelist
-                            boolean hasWhitelist = analyzeDisconnectMessage(message);
-                            return new WhitelistCheckResult(CheckStatus.SUCCESS, hasWhitelist);
-                        }
-                        
-                    } else if (packetId == 0x01) { // Encryption Request
-                        System.out.println("[WhiteList Check] -> Encryption request = inconclusive");
-                        return new WhitelistCheckResult(CheckStatus.INCONCLUSIVE, false);
-                        
-                    } else if (packetId == 0x02) { // Login Success
-                        System.out.println("[WhiteList Check] → Login success = NO whitelist");
-                        return new WhitelistCheckResult(CheckStatus.SUCCESS, false);
-                        
-                    } else if (packetId == 0x03) { // Set Compression
-                        System.out.println("[WhiteList Check] -> Compression = inconclusive");
-                        return new WhitelistCheckResult(CheckStatus.INCONCLUSIVE, false);
-                    }
-                    
-                } catch (IOException e) {
-                    System.out.println("[WhiteList Check] Read error: " + e.getMessage());
-                    return new WhitelistCheckResult(CheckStatus.ERROR, false);
-                }
-                
+                sendLoginHandshake(out, ip, port, protocolVersion);
+                sendLoginStart(out, username, protocolVersion);
+
+                byte[] response = readPacket(in);
+                return readLoginResponse(response, in, false);
             }
-            
         } catch (Exception e) {
-            System.out.println("[WhiteList Check] Connection error: " + e.getMessage());
-            return new WhitelistCheckResult(CheckStatus.ERROR, false);
+            return LoginCheckResult.unknown(e.getMessage());
         }
-        
-        return new WhitelistCheckResult(CheckStatus.ERROR, false);
-    }
-    
-    private static boolean isVersionMismatch(String message) {
-        String lower = message.toLowerCase();
-        String[] versionKeywords = {
-            "outdated client", "outdated server", "version mismatch",
-            "несовпадение версий", "устаревший клиент", "устаревший сервер",
-            "требуется", "required", "incompatible", "несовместим"
-        };
-        
-        for (String keyword : versionKeywords) {
-            if (lower.contains(keyword)) {
-                return true;
-            }
-        }
-        
-        // Check JSON translate keys
-        if (message.contains("multiplayer.disconnect.outdated") ||
-            message.contains("multiplayer.disconnect.incompatible")) {
-            return true;
-        }
-        
-        return false;
     }
 
-    private static boolean analyzeDisconnectMessage(String message) {
-        String lower = message.toLowerCase();
+    private static void sendLoginHandshake(DataOutputStream out, String host, int port,
+                                           int protocolVersion) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        DataOutputStream handshake = new DataOutputStream(buffer);
+        handshake.writeByte(0);
+        writeVarInt(handshake, protocolVersion);
+        writeString(handshake, host);
+        handshake.writeShort(port);
+        writeVarInt(handshake, 2);
 
-        String[] whitelistRoots = {
+        byte[] packet = buffer.toByteArray();
+        writeVarInt(out, packet.length);
+        out.write(packet);
+        out.flush();
+    }
 
-                "whitelist", "white-list", "white list", "whitelis",
-                "not allow", "not allowe", "not permit", "not permitte",
-                "deny", "deni", "denied",
-                "restrict", "restriction",
-                "forbid", "forbidden",
-                "unauthor", "unauthoriz",
-                "authoriz", "authorisat",
-                "access den", "access forbid",
-                "join den", "join forbid",
-                "not member", "only member",
-                "private serv", "private server",
-                "you cannot", "you can't",
-                "not invited", "invite only",
+    static void sendLoginStart(DataOutputStream out, String username,
+                               int protocolVersion) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        DataOutputStream login = new DataOutputStream(buffer);
+        login.writeByte(0);
+        writeString(login, username);
 
-                "бел",
-                "вайт",
-                "спис",
-                "доступ",
-                "запрещ",
-                "разреш",
-                "не разреш",
-                "нет доступ",
-                "доступ закр",
-                "авториз",
-                "не авториз",
-                "огранич",
-                "приват",
-                "закрыт",
-                "вход запрещ",
-                "не пуск",
-                "только для",
-                "нет прав",
-                "отказано"
-        };
-
-        for (String root : whitelistRoots) {
-            if (lower.contains(root)) {
-                System.out.println("[WhiteList Check] ✓ ROOT MATCH: '" + root + "'");
-                return true;
-            }
+        if (protocolVersion == 759) {
+            login.writeBoolean(false); // No signed profile key in 1.19.
+        } else if (protocolVersion == 760) {
+            login.writeBoolean(false); // No signed profile key.
+            login.writeBoolean(false); // Let the server create the offline UUID.
+        } else if (protocolVersion >= 761 && protocolVersion <= 763) {
+            login.writeBoolean(false); // Optional UUID in 1.19.3 through 1.20.1.
+        } else if (protocolVersion >= 764) {
+            UUID offlineUuid = UUID.nameUUIDFromBytes(
+                ("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8));
+            login.writeLong(offlineUuid.getMostSignificantBits());
+            login.writeLong(offlineUuid.getLeastSignificantBits());
         }
 
-        if (message.contains("{") && message.contains("}")) {
+        byte[] packet = buffer.toByteArray();
+        writeVarInt(out, packet.length);
+        out.write(packet);
+        out.flush();
+    }
+
+    private static LoginCheckResult readLoginResponse(byte[] packet, DataInputStream socketIn,
+                                                      boolean compressionEnabled) throws IOException {
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(packet));
+        int packetId = readVarInt(in);
+
+        if (packetId == 0x00) {
+            String rawReason = readString(in);
+            JoinStatus status = classifyDisconnectReason(rawReason);
+            String reason = readableDisconnectReason(rawReason);
+            CheckState state = status == JoinStatus.VERSION_MISMATCH
+                ? CheckState.PROTOCOL_MISMATCH
+                : CheckState.MATCHED;
+            return new LoginCheckResult(state, status, reason);
+        }
+        if (packetId == 0x01) {
+            return LoginCheckResult.matched(JoinStatus.ONLINE_MODE,
+                "Server requires an authenticated Minecraft account");
+        }
+        if (packetId == 0x02) {
+            return LoginCheckResult.matched(JoinStatus.OPEN, "");
+        }
+        if (packetId == 0x03 && !compressionEnabled) {
+            readVarInt(in); // Compression threshold.
             try {
-                JSONObject json = new JSONObject(message);
-
-                if (json.has("translate")) {
-                    String translate = json.getString("translate").toLowerCase();
-                    for (String root : whitelistRoots) {
-                        if (translate.contains(root)) {
-                            System.out.println("[WhiteList Check] ✓ JSON TRANSLATE ROOT: '" + root + "'");
-                            return true;
-                        }
-                    }
-                }
-
-                String fullText = extractTextFromJson(json).toLowerCase();
-                for (String root : whitelistRoots) {
-                    if (fullText.contains(root)) {
-                        System.out.println("[WhiteList Check] ✓ JSON TEXT ROOT: '" + root + "'");
-                        return true;
-                    }
-                }
-
-            } catch (Exception ignored) {
+                return readLoginResponse(readCompressedPacket(socketIn), socketIn, true);
+            } catch (IOException e) {
+                return LoginCheckResult.matched(JoinStatus.UNKNOWN,
+                    "Login continued after compression, but the final response was not received");
             }
         }
+        if (packetId == 0x04) {
+            readVarInt(in); // Login plugin request id.
+            String channel = readString(in);
+            JoinStatus status = isModdedLoginChannel(channel)
+                ? JoinStatus.MODS_REQUIRED
+                : JoinStatus.REJECTED;
+            return LoginCheckResult.matched(status, "Custom login channel: " + channel);
+        }
 
+        return LoginCheckResult.matched(JoinStatus.UNKNOWN,
+            "Unexpected login packet 0x" + Integer.toHexString(packetId).toUpperCase(Locale.ROOT));
+    }
+
+    private static byte[] readPacket(DataInputStream in) throws IOException {
+        int length = readVarInt(in);
+        if (length <= 0 || length > 1_048_576) {
+            throw new IOException("Invalid packet length: " + length);
+        }
+        byte[] packet = new byte[length];
+        in.readFully(packet);
+        return packet;
+    }
+
+    private static byte[] readCompressedPacket(DataInputStream in) throws IOException {
+        byte[] frame = readPacket(in);
+        DataInputStream frameIn = new DataInputStream(new ByteArrayInputStream(frame));
+        int uncompressedLength = readVarInt(frameIn);
+        byte[] payload = new byte[frameIn.available()];
+        frameIn.readFully(payload);
+        if (uncompressedLength == 0) {
+            return payload;
+        }
+        if (uncompressedLength < 0 || uncompressedLength > 1_048_576) {
+            throw new IOException("Invalid uncompressed packet length: " + uncompressedLength);
+        }
+
+        Inflater inflater = new Inflater();
+        inflater.setInput(payload);
+        byte[] result = new byte[uncompressedLength];
+        int offset = 0;
+        try {
+            while (!inflater.finished() && offset < result.length) {
+                int count = inflater.inflate(result, offset, result.length - offset);
+                if (count == 0) {
+                    if (inflater.needsInput()) {
+                        break;
+                    }
+                    throw new IOException("Compressed login packet could not be decoded");
+                }
+                offset += count;
+            }
+        } catch (DataFormatException e) {
+            throw new IOException("Invalid compressed login packet", e);
+        } finally {
+            inflater.end();
+        }
+        if (offset != uncompressedLength) {
+            throw new IOException("Incomplete compressed login packet");
+        }
+        return result;
+    }
+
+    private static String readString(DataInputStream in) throws IOException {
+        int length = readVarInt(in);
+        if (length < 0 || length > 262144 || length > in.available()) {
+            throw new IOException("Invalid string length: " + length);
+        }
+        byte[] bytes = new byte[length];
+        in.readFully(bytes);
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private static boolean isModdedLoginChannel(String channel) {
+        String lower = channel.toLowerCase(Locale.ROOT);
+        return lower.contains("forge") || lower.contains("fml") || lower.contains("neoforge")
+            || lower.contains("fabric") || lower.contains("quilt");
+    }
+
+    static JoinStatus classifyDisconnectReason(String message) {
+        String lower = (message + " " + readableDisconnectReason(message)).toLowerCase(Locale.ROOT);
+
+        if (containsAny(lower,
+                "multiplayer.disconnect.not_whitelisted", "not whitelisted", "not on the whitelist",
+                "white-list", "white list", "allowlist", "вайтлист", "белом списке", "белый список")) {
+            return JoinStatus.WHITELIST;
+        }
+        if (containsAny(lower,
+                "mods that require forge", "requires forge", "require fml", "requires neoforge",
+                "requires fabric", "incompatible mod", "mod mismatch", "mismatched mod",
+                "missing required mod", "missing mods", "необходимы моды", "требуются моды")) {
+            return JoinStatus.MODS_REQUIRED;
+        }
+        if (containsAny(lower,
+                "multiplayer.disconnect.banned", "multiplayer.disconnect.ip_banned",
+                "you are banned", "you have been banned", "ip banned", "забанен", "заблокирован")) {
+            return JoinStatus.BANNED;
+        }
+        if (containsAny(lower,
+                "multiplayer.disconnect.server_full", "server is full", "server full",
+                "сервер заполнен", "сервер полон")) {
+            return JoinStatus.SERVER_FULL;
+        }
+        if (containsAny(lower,
+                "connection throttled", "too many connections", "rate limit",
+                "слишком много подключений", "слишком част")) {
+            return JoinStatus.RATE_LIMITED;
+        }
+        if (containsAny(lower,
+                "multiplayer.disconnect.unverified_username", "failed to verify username",
+                "unverified username", "invalid session", "not authenticated with minecraft.net",
+                "authentication servers are down", "online mode", "не удалось проверить имя",
+                "недействительная сессия", "ошибка авторизации")) {
+            return JoinStatus.AUTH_FAILED;
+        }
+        if (isVersionMismatch(lower)) {
+            return JoinStatus.VERSION_MISMATCH;
+        }
+        return JoinStatus.REJECTED;
+    }
+
+    private static boolean isVersionMismatch(String message) {
+        String lower = message.toLowerCase(Locale.ROOT);
+        return containsAny(lower,
+            "multiplayer.disconnect.outdated", "multiplayer.disconnect.incompatible",
+            "outdated client", "outdated server", "version mismatch", "incompatible client",
+            "несовпадение версий", "устаревший клиент", "устаревший сервер",
+            "несовместимая версия", "несовместимый клиент");
+    }
+
+    static String readableDisconnectReason(String message) {
+        String text = message == null ? "" : message.trim();
+        try {
+            Object component = new JSONTokener(text).nextValue();
+            StringBuilder readable = new StringBuilder();
+            appendChatComponent(component, readable);
+            if (readable.length() > 0) {
+                text = readable.toString();
+            }
+        } catch (Exception ignored) {
+            // Some servers send plain text instead of a JSON chat component.
+        }
+
+        text = text.replace("multiplayer.disconnect.not_whitelisted", "Not whitelisted")
+            .replace("multiplayer.disconnect.server_full", "Server full")
+            .replace("multiplayer.disconnect.unverified_username", "Username verification failed")
+            .replace("multiplayer.disconnect.ip_banned", "IP banned")
+            .replace("multiplayer.disconnect.banned", "Banned")
+            .replace("multiplayer.disconnect.outdated_client", "Outdated client")
+            .replace("multiplayer.disconnect.outdated_server", "Outdated server")
+            .replace("multiplayer.disconnect.incompatible", "Incompatible version");
+        return text.replaceAll("(?i)\\u00A7[0-9A-FK-OR]", "")
+            .replace('\r', ' ').replace('\n', ' ').replaceAll("\\s+", " ").trim();
+    }
+
+    private static void appendChatComponent(Object component, StringBuilder text) {
+        if (component instanceof JSONObject) {
+            JSONObject json = (JSONObject) component;
+            appendPiece(text, json.optString("text", ""));
+            appendPiece(text, json.optString("translate", ""));
+            appendChatArray(json.optJSONArray("with"), text);
+            appendChatArray(json.optJSONArray("extra"), text);
+        } else if (component instanceof JSONArray) {
+            appendChatArray((JSONArray) component, text);
+        } else if (component != null && component != JSONObject.NULL) {
+            appendPiece(text, String.valueOf(component));
+        }
+    }
+
+    private static void appendChatArray(JSONArray array, StringBuilder text) {
+        if (array == null) {
+            return;
+        }
+        for (int i = 0; i < array.length(); i++) {
+            appendChatComponent(array.opt(i), text);
+        }
+    }
+
+    private static void appendPiece(StringBuilder text, String piece) {
+        if (piece == null || piece.trim().isEmpty()) {
+            return;
+        }
+        if (text.length() > 0) {
+            text.append(' ');
+        }
+        text.append(piece.trim());
+    }
+
+    private static boolean containsAny(String text, String... values) {
+        for (String value : values) {
+            if (text.contains(value)) {
+                return true;
+            }
+        }
         return false;
     }
 

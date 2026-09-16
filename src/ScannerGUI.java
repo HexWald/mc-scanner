@@ -525,9 +525,9 @@ public class ScannerGUI extends JFrame {
 
             ServerInfo info = progress.getLastResult();
             if (info != null && info.isOnline()) {
-                statusLabel.setText(String.format("%sFound: %s:%d [%s] WL:%s",
+                statusLabel.setText(String.format("%sFound: %s:%d [%s] Access: %s",
                     prefix, info.getIp(), info.getPort(), info.getVersion(),
-                    info.hasWhitelist() ? "YES" : "NO"));
+                    info.getJoinStatus().getLabel()));
             } else if (info != null) {
                 statusLabel.setText(prefix + "Scanning: " + info.getIp() + ":" + info.getPort());
             }
@@ -673,9 +673,12 @@ public class ScannerGUI extends JFrame {
             changes.add("players " + previous.getPlayersOnline() + "/" + previous.getPlayersMax()
                 + " -> " + current.getPlayersOnline() + "/" + current.getPlayersMax());
         }
-        if (previous.hasWhitelist() != current.hasWhitelist()) {
-            changes.add("WL " + (previous.hasWhitelist() ? "YES" : "NO")
-                + " -> " + (current.hasWhitelist() ? "YES" : "NO"));
+        if (previous.getJoinStatus() != current.getJoinStatus()) {
+            changes.add("access " + previous.getJoinStatus().getLabel()
+                + " -> " + current.getJoinStatus().getLabel());
+        }
+        if (!Objects.equals(previous.getKickReason(), current.getKickReason())) {
+            changes.add("kick reason changed");
         }
         if (!Objects.equals(previous.getDisplayMotd(), current.getDisplayMotd())) {
             changes.add("MOTD changed");

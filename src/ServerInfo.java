@@ -12,6 +12,8 @@ public class ServerInfo {
     private final boolean hasWhitelist;
     private final long ping;
     private final int protocolVersion;
+    private final JoinStatus joinStatus;
+    private final String kickReason;
     
     public ServerInfo(String ip, int port, boolean online, String version,
                       int playersOnline, int playersMax, String motd,
@@ -22,6 +24,13 @@ public class ServerInfo {
     public ServerInfo(String ip, int port, boolean online, String version,
                       int playersOnline, int playersMax, String motd,
                       boolean hasWhitelist, long ping, int protocolVersion) {
+        this(ip, port, online, version, playersOnline, playersMax, motd, ping, protocolVersion,
+            hasWhitelist ? JoinStatus.WHITELIST : JoinStatus.UNKNOWN, "");
+    }
+
+    public ServerInfo(String ip, int port, boolean online, String version,
+                      int playersOnline, int playersMax, String motd,
+                      long ping, int protocolVersion, JoinStatus joinStatus, String kickReason) {
         this.ip = ip;
         this.port = port;
         this.online = online;
@@ -29,9 +38,11 @@ public class ServerInfo {
         this.playersOnline = playersOnline;
         this.playersMax = playersMax;
         this.motd = motd;
-        this.hasWhitelist = hasWhitelist;
+        this.hasWhitelist = joinStatus == JoinStatus.WHITELIST;
         this.ping = ping;
         this.protocolVersion = protocolVersion;
+        this.joinStatus = joinStatus != null ? joinStatus : JoinStatus.UNKNOWN;
+        this.kickReason = cleanText(kickReason);
     }
     
     public ServerInfo(String ip, int port) {
@@ -49,6 +60,8 @@ public class ServerInfo {
     public boolean hasWhitelist() { return hasWhitelist; }
     public long getPing() { return ping; }
     public int getProtocolVersion() { return protocolVersion; }
+    public JoinStatus getJoinStatus() { return joinStatus; }
+    public String getKickReason() { return kickReason; }
     
     @Override
     public String toString() {
@@ -58,18 +71,27 @@ public class ServerInfo {
         String cleanMotd = getDisplayMotd();
         if (cleanMotd.length() > 60) cleanMotd = cleanMotd.substring(0, 57) + "...";
         
-        return String.format("%s:%-5d | %-15s | Players: %3d/%-3d | Ping: %4dms | WL: %-3s | %s",
+        String reason = kickReason.isEmpty() ? "" : " | Reason: " + shorten(kickReason, 100);
+        return String.format("%s:%-5d | %-15s | Players: %3d/%-3d | Ping: %4dms | Access: %-20s | %s%s",
             ip, port, version, playersOnline, playersMax, ping,
-            hasWhitelist ? "YES" : "NO", cleanMotd);
+            joinStatus.getLabel(), cleanMotd, reason);
     }
 
     private static String cleanMotd(String value) {
+        return cleanText(value);
+    }
+
+    private static String cleanText(String value) {
         String clean = value == null ? "" : value;
         clean = repairCommonMojibake(clean);
         clean = clean.replaceAll("(?i)\\u00A7[0-9A-FK-OR]", "");
         clean = clean.replace('\r', ' ').replace('\n', ' ');
         clean = clean.replaceAll("\\s+", " ").trim();
         return clean;
+    }
+
+    private static String shorten(String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength - 3) + "...";
     }
 
     private static String repairCommonMojibake(String value) {

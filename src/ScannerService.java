@@ -264,7 +264,7 @@ public class ScannerService {
         try (PrintWriter writer = new PrintWriter(new BufferedWriter(
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)), true)) {
             writer.write('\ufeff');
-            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,whitelist,motd");
+            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,whitelist,access,kickReason,motd");
             for (ServerInfo info : getResultsSnapshot()) {
                 writer.println(String.join(",",
                     csv(info.getIp()),
@@ -275,6 +275,8 @@ public class ScannerService {
                     String.valueOf(info.getPlayersMax()),
                     String.valueOf(info.getPing()),
                     csv(info.hasWhitelist() ? "YES" : "NO"),
+                    csv(info.getJoinStatus().name()),
+                    csv(info.getKickReason()),
                     csv(info.getDisplayMotd())
                 ));
             }
@@ -303,6 +305,8 @@ public class ScannerService {
             server.put("playersMax", info.getPlayersMax());
             server.put("pingMs", info.getPing());
             server.put("whitelist", info.hasWhitelist());
+            server.put("access", info.getJoinStatus().name());
+            server.put("kickReason", info.getKickReason());
             server.put("motd", info.getDisplayMotd());
             servers.put(server);
         }
