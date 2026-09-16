@@ -58,6 +58,15 @@ public class ServerInfo {
     public String getMotd() { return motd; }
     public String getDisplayMotd() { return cleanMotd(motd); }
     public boolean hasWhitelist() { return hasWhitelist; }
+    public Boolean getWhitelistResult() {
+        if (joinStatus == JoinStatus.WHITELIST) {
+            return Boolean.TRUE;
+        }
+        if (joinStatus == JoinStatus.OPEN) {
+            return Boolean.FALSE;
+        }
+        return null;
+    }
     public long getPing() { return ping; }
     public int getProtocolVersion() { return protocolVersion; }
     public JoinStatus getJoinStatus() { return joinStatus; }

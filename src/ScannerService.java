@@ -274,7 +274,7 @@ public class ScannerService {
                     String.valueOf(info.getPlayersOnline()),
                     String.valueOf(info.getPlayersMax()),
                     String.valueOf(info.getPing()),
-                    csv(info.hasWhitelist() ? "YES" : "NO"),
+                    csv(whitelistText(info)),
                     csv(info.getJoinStatus().name()),
                     csv(info.getKickReason()),
                     csv(info.getDisplayMotd())
@@ -304,7 +304,8 @@ public class ScannerService {
             server.put("playersOnline", info.getPlayersOnline());
             server.put("playersMax", info.getPlayersMax());
             server.put("pingMs", info.getPing());
-            server.put("whitelist", info.hasWhitelist());
+            Boolean whitelist = info.getWhitelistResult();
+            server.put("whitelist", whitelist != null ? whitelist : JSONObject.NULL);
             server.put("access", info.getJoinStatus().name());
             server.put("kickReason", info.getKickReason());
             server.put("motd", info.getDisplayMotd());
@@ -330,6 +331,14 @@ public class ScannerService {
     private static String csv(String value) {
         String safe = value == null ? "" : value;
         return "\"" + safe.replace("\"", "\"\"") + "\"";
+    }
+
+    private static String whitelistText(ServerInfo info) {
+        Boolean whitelist = info.getWhitelistResult();
+        if (whitelist == null) {
+            return "UNKNOWN";
+        }
+        return whitelist ? "YES" : "NO";
     }
 
     private static String repeat(String text, int count) {

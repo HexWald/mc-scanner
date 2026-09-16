@@ -32,6 +32,12 @@ public class JoinReasonClassifierTest {
         expectLoginStartSize(761, 8); // Name and optional UUID.
         expectLoginStartSize(764, 23); // Name and required UUID.
 
+        ServerInfo unknown = new ServerInfo("localhost", 25565, true, "1.21.4",
+            0, 20, "", 5, 768, JoinStatus.ONLINE_MODE, "Authentication required");
+        if (unknown.getWhitelistResult() != null) {
+            throw new AssertionError("Online mode must not be reported as whitelist: NO");
+        }
+
         System.out.println("Join reason checks passed");
     }
 
