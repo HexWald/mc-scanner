@@ -185,7 +185,6 @@ public class ScannerService {
             writer.println("                    MINECRAFT SERVER SCANNER - DETAILED RESULTS");
             writer.println(repeat("=", 100));
             writer.println("Scan Date:    " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-            writer.println("Target IPs:   " + String.join(", ", targetIPs));
             writer.println("Port Range:   " + startPort + " - " + (startPort + limit - 1));
             writer.println("Scan Speed:   " + scanSpeed);
             writer.println("Check Nick:   " + checkUsername);
@@ -217,7 +216,7 @@ public class ScannerService {
             }
             
             writer.println(repeat("-", 100));
-            writer.println("RESULTS FOR ALL IPs: " + String.join(", ", targetIPs));
+            writer.println("SCAN RESULTS");
             writer.println(repeat("-", 100));
             writer.println();
             
