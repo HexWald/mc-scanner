@@ -1,5 +1,8 @@
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class ServerInfo {
     private final String ip;
@@ -16,6 +19,8 @@ public class ServerInfo {
     private final String kickReason;
     private final ServerPlatform serverPlatform;
     private final Boolean clientModsRequired;
+    private final List<DetectedMod> mods;
+    private final boolean modListTruncated;
     
     public ServerInfo(String ip, int port, boolean online, String version,
                       int playersOnline, int playersMax, String motd,
@@ -41,6 +46,16 @@ public class ServerInfo {
                       int playersOnline, int playersMax, String motd,
                       long ping, int protocolVersion, JoinStatus joinStatus, String kickReason,
                       ServerPlatform serverPlatform, Boolean clientModsRequired) {
+        this(ip, port, online, version, playersOnline, playersMax, motd, ping, protocolVersion,
+            joinStatus, kickReason, serverPlatform, clientModsRequired,
+            Collections.<DetectedMod>emptyList(), false);
+    }
+
+    public ServerInfo(String ip, int port, boolean online, String version,
+                      int playersOnline, int playersMax, String motd,
+                      long ping, int protocolVersion, JoinStatus joinStatus, String kickReason,
+                      ServerPlatform serverPlatform, Boolean clientModsRequired,
+                      List<DetectedMod> mods, boolean modListTruncated) {
         this.ip = ip;
         this.port = port;
         this.online = online;
@@ -55,6 +70,9 @@ public class ServerInfo {
         this.kickReason = cleanText(kickReason);
         this.serverPlatform = serverPlatform != null ? serverPlatform : ServerPlatform.UNKNOWN;
         this.clientModsRequired = clientModsRequired;
+        List<DetectedMod> safeMods = mods != null ? mods : Collections.<DetectedMod>emptyList();
+        this.mods = Collections.unmodifiableList(new ArrayList<>(safeMods));
+        this.modListTruncated = modListTruncated;
     }
     
     public ServerInfo(String ip, int port) {
@@ -88,6 +106,31 @@ public class ServerInfo {
     public String getClientModsText() {
         if (clientModsRequired == null) return "UNKNOWN";
         return clientModsRequired ? "YES" : "NO";
+    }
+    public List<DetectedMod> getMods() { return mods; }
+    public int getModCount() { return mods.size(); }
+    public boolean isModListTruncated() { return modListTruncated; }
+    public String getModListText() {
+        StringBuilder text = new StringBuilder();
+        for (DetectedMod mod : mods) {
+            if (text.length() > 0) text.append("; ");
+            text.append(mod);
+        }
+        return text.toString();
+    }
+    public String getCompactModSummary() {
+        if (mods.isEmpty()) return "";
+        int shown = Math.min(8, mods.size());
+        StringBuilder text = new StringBuilder("Mods (")
+            .append(mods.size()).append(modListTruncated ? "+" : "").append("): ");
+        for (int i = 0; i < shown; i++) {
+            if (i > 0) text.append(", ");
+            text.append(mods.get(i).getId());
+        }
+        if (mods.size() > shown) {
+            text.append(" (+").append(mods.size() - shown).append(" more)");
+        }
+        return text.toString();
     }
     
     @Override

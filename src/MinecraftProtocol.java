@@ -240,7 +240,7 @@ public class MinecraftProtocol {
             
             return new ServerInfo(ip, port, true, version, online, max, motd, ping, protocolVersion,
                 loginCheck.joinStatus, loginCheck.reason, detection.getPlatform(),
-                detection.getClientModsRequired());
+                detection.getClientModsRequired(), detection.getMods(), detection.isModListTruncated());
             
         } catch (JSONException e) {
             return new ServerInfo(ip, port, true, "Parse Error", 0, 0, "", false, ping);

@@ -3,7 +3,11 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -17,16 +21,20 @@ public final class ServerDetection {
                                 JoinStatus joinStatus, String kickReason) {
         ServerPlatform platform = platformFromText(version + " " + kickReason);
         Boolean clientModsRequired = joinStatus == JoinStatus.MODS_REQUIRED ? Boolean.TRUE : null;
+        List<DetectedMod> mods = new ArrayList<>();
+        boolean modListTruncated = false;
 
         JSONObject forgeData = status.optJSONObject("forgeData");
         if (forgeData != null) {
             if (platform != ServerPlatform.NEOFORGE) {
                 platform = ServerPlatform.FORGE;
             }
-            Boolean required = requiredFromForgeData(forgeData, protocolVersion);
-            if (required != null) {
-                clientModsRequired = required;
+            ForgeDetails details = readForgeData(forgeData, protocolVersion);
+            if (details.clientModsRequired != null) {
+                clientModsRequired = details.clientModsRequired;
             }
+            mods.addAll(details.mods);
+            modListTruncated = details.truncated;
         }
 
         JSONObject modInfo = status.optJSONObject("modinfo");
@@ -39,13 +47,14 @@ public final class ServerDetection {
             } else if (type.contains("bukkit")) {
                 platform = ServerPlatform.BUKKIT;
             }
+            addMods(mods, modInfo.optJSONArray("modList"));
         }
 
         if (clientModsRequired == null && joinStatus == JoinStatus.OPEN && !platform.isModLoader()) {
             clientModsRequired = Boolean.FALSE;
         }
 
-        return new Result(platform, clientModsRequired);
+        return new Result(platform, clientModsRequired, uniqueMods(mods), modListTruncated);
     }
 
     private static ServerPlatform platformFromText(String value) {
@@ -69,13 +78,18 @@ public final class ServerDetection {
             : ServerPlatform.VANILLA_OR_HIDDEN;
     }
 
-    private static Boolean requiredFromForgeData(JSONObject forgeData, int protocolVersion) {
+    private static ForgeDetails readForgeData(JSONObject forgeData, int protocolVersion) {
+        List<DetectedMod> mods = new ArrayList<>();
+        addMods(mods, forgeData.optJSONArray("mods"));
+        boolean truncated = forgeData.optBoolean("truncated", false);
+        boolean packedFailed = false;
+
         String packed = forgeData.optString("d", "");
         if (!packed.isEmpty()) {
             try {
                 return readPackedForgeData(packed, protocolVersion);
             } catch (IOException | RuntimeException ignored) {
-                return null;
+                packedFailed = true;
             }
         }
 
@@ -84,32 +98,36 @@ public final class ServerDetection {
             for (int i = 0; i < channels.length(); i++) {
                 JSONObject channel = channels.optJSONObject(i);
                 if (channel != null && channel.optBoolean("required", false)) {
-                    return Boolean.TRUE;
+                    return new ForgeDetails(Boolean.TRUE, mods, truncated);
                 }
             }
-            return forgeData.optBoolean("truncated", false) ? null : Boolean.FALSE;
+            Boolean required = truncated || packedFailed ? null : Boolean.FALSE;
+            return new ForgeDetails(required, mods, truncated);
         }
-
-        return null;
+        return new ForgeDetails(null, mods, truncated);
     }
 
-    private static Boolean readPackedForgeData(String packed, int protocolVersion) throws IOException {
+    private static ForgeDetails readPackedForgeData(String packed, int protocolVersion) throws IOException {
         byte[] decoded = decodeUtf15(packed);
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(decoded))) {
             boolean truncated = input.readBoolean();
+            boolean clientModsRequired = false;
+            List<DetectedMod> mods = new ArrayList<>();
             int modCount = input.readUnsignedShort();
             for (int i = 0; i < modCount; i++) {
                 int channelData = readVarInt(input);
-                readString(input);
+                String id = readString(input);
+                String version = "";
                 if ((channelData & 1) == 0) {
-                    readString(input);
+                    version = readString(input);
                 }
+                mods.add(new DetectedMod(id, version));
                 int channelCount = channelData >>> 1;
                 for (int channel = 0; channel < channelCount; channel++) {
                     readString(input);
                     readChannelVersion(input, protocolVersion);
                     if (input.readBoolean()) {
-                        return Boolean.TRUE;
+                        clientModsRequired = true;
                     }
                 }
             }
@@ -119,11 +137,34 @@ public final class ServerDetection {
                 readString(input);
                 readChannelVersion(input, protocolVersion);
                 if (input.readBoolean()) {
-                    return Boolean.TRUE;
+                    clientModsRequired = true;
                 }
             }
-            return truncated ? null : Boolean.FALSE;
+            Boolean required = clientModsRequired ? Boolean.TRUE : (truncated ? null : Boolean.FALSE);
+            return new ForgeDetails(required, mods, truncated);
         }
+    }
+
+    private static void addMods(List<DetectedMod> mods, JSONArray values) {
+        if (values == null) return;
+        for (int i = 0; i < values.length(); i++) {
+            JSONObject value = values.optJSONObject(i);
+            if (value == null) continue;
+
+            String id = value.optString("modId", value.optString("modid", "")).trim();
+            String version = value.optString("modmarker", value.optString("version", "")).trim();
+            if (!id.isEmpty()) {
+                mods.add(new DetectedMod(id, version));
+            }
+        }
+    }
+
+    private static List<DetectedMod> uniqueMods(List<DetectedMod> mods) {
+        Map<String, DetectedMod> unique = new LinkedHashMap<>();
+        for (DetectedMod mod : mods) {
+            unique.put(mod.getId().toLowerCase(Locale.ROOT), mod);
+        }
+        return new ArrayList<>(unique.values());
     }
 
     private static void readChannelVersion(DataInputStream input, int protocolVersion) throws IOException {
@@ -190,10 +231,15 @@ public final class ServerDetection {
     public static final class Result {
         private final ServerPlatform platform;
         private final Boolean clientModsRequired;
+        private final List<DetectedMod> mods;
+        private final boolean modListTruncated;
 
-        Result(ServerPlatform platform, Boolean clientModsRequired) {
+        Result(ServerPlatform platform, Boolean clientModsRequired,
+               List<DetectedMod> mods, boolean modListTruncated) {
             this.platform = platform;
             this.clientModsRequired = clientModsRequired;
+            this.mods = mods;
+            this.modListTruncated = modListTruncated;
         }
 
         public ServerPlatform getPlatform() {
@@ -202,6 +248,26 @@ public final class ServerDetection {
 
         public Boolean getClientModsRequired() {
             return clientModsRequired;
+        }
+
+        public List<DetectedMod> getMods() {
+            return new ArrayList<>(mods);
+        }
+
+        public boolean isModListTruncated() {
+            return modListTruncated;
+        }
+    }
+
+    private static final class ForgeDetails {
+        private final Boolean clientModsRequired;
+        private final List<DetectedMod> mods;
+        private final boolean truncated;
+
+        ForgeDetails(Boolean clientModsRequired, List<DetectedMod> mods, boolean truncated) {
+            this.clientModsRequired = clientModsRequired;
+            this.mods = mods;
+            this.truncated = truncated;
         }
     }
 }

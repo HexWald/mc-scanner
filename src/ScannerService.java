@@ -224,7 +224,7 @@ public class ScannerService {
             if (!onlineWithPlayers.isEmpty()) {
                 writer.println("Online servers with players:");
                 for (ServerInfo info : onlineWithPlayers) {
-                    writer.println("  " + info.toString());
+                    writeServer(writer, info);
                 }
                 writer.println();
             }
@@ -232,7 +232,7 @@ public class ScannerService {
             if (!whitelistWithPlayers.isEmpty()) {
                 writer.println("Whitelist servers with players:");
                 for (ServerInfo info : whitelistWithPlayers) {
-                    writer.println("  " + info.toString());
+                    writeServer(writer, info);
                 }
                 writer.println();
             }
@@ -240,7 +240,7 @@ public class ScannerService {
             if (!whitelistNoPlayers.isEmpty()) {
                 writer.println("Whitelist servers (0 players):");
                 for (ServerInfo info : whitelistNoPlayers) {
-                    writer.println("  " + info.toString());
+                    writeServer(writer, info);
                 }
                 writer.println();
             }
@@ -248,7 +248,7 @@ public class ScannerService {
             if (!onlineNoPlayers.isEmpty()) {
                 writer.println("Online servers (0 players):");
                 for (ServerInfo info : onlineNoPlayers) {
-                    writer.println("  " + info.toString());
+                    writeServer(writer, info);
                 }
                 writer.println();
             }
@@ -263,7 +263,7 @@ public class ScannerService {
         try (PrintWriter writer = new PrintWriter(new BufferedWriter(
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)), true)) {
             writer.write('\ufeff');
-            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,serverType,clientModsRequired,whitelist,access,kickReason,motd");
+            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,serverType,clientModsRequired,modCount,modListTruncated,mods,whitelist,access,kickReason,motd");
             for (ServerInfo info : getResultsSnapshot()) {
                 writer.println(String.join(",",
                     csv(info.getIp()),
@@ -275,6 +275,9 @@ public class ScannerService {
                     String.valueOf(info.getPing()),
                     csv(info.getServerPlatform().getLabel()),
                     csv(info.getClientModsText()),
+                    String.valueOf(info.getModCount()),
+                    String.valueOf(info.isModListTruncated()),
+                    csv(info.getModListText()),
                     csv(whitelistText(info)),
                     csv(info.getJoinStatus().name()),
                     csv(info.getKickReason()),
@@ -308,6 +311,13 @@ public class ScannerService {
             server.put("serverType", info.getServerPlatform().getLabel());
             Boolean clientModsRequired = info.getClientModsRequired();
             server.put("clientModsRequired", clientModsRequired != null ? clientModsRequired : JSONObject.NULL);
+            server.put("modCount", info.getModCount());
+            server.put("modListTruncated", info.isModListTruncated());
+            JSONArray mods = new JSONArray();
+            for (DetectedMod mod : info.getMods()) {
+                mods.put(new JSONObject().put("id", mod.getId()).put("version", mod.getVersion()));
+            }
+            server.put("mods", mods);
             Boolean whitelist = info.getWhitelistResult();
             server.put("whitelist", whitelist != null ? whitelist : JSONObject.NULL);
             server.put("access", info.getJoinStatus().name());
@@ -335,6 +345,14 @@ public class ScannerService {
     private static String csv(String value) {
         String safe = value == null ? "" : value;
         return "\"" + safe.replace("\"", "\"\"") + "\"";
+    }
+
+    private static void writeServer(PrintWriter writer, ServerInfo info) {
+        writer.println("  " + info.toString());
+        String mods = info.getCompactModSummary();
+        if (!mods.isEmpty()) {
+            writer.println("    " + mods);
+        }
     }
 
     private static String whitelistText(ServerInfo info) {

@@ -685,6 +685,10 @@ public class ScannerGUI extends JFrame {
             changes.add("client mods " + previous.getClientModsText()
                 + " -> " + current.getClientModsText());
         }
+        if (!previous.getMods().equals(current.getMods())
+                || previous.isModListTruncated() != current.isModListTruncated()) {
+            changes.add("mod list changed");
+        }
         if (!Objects.equals(previous.getKickReason(), current.getKickReason())) {
             changes.add("kick reason changed");
         }

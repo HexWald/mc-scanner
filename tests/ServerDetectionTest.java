@@ -7,12 +7,20 @@ import org.json.JSONObject;
 public class ServerDetectionTest {
     public static void main(String[] args) throws Exception {
         JSONObject forge = new JSONObject().put("forgeData", new JSONObject()
-            .put("channels", new JSONArray().put(new JSONObject().put("required", true))));
-        expect(forge, "1.19.2", 760, JoinStatus.UNKNOWN, ServerPlatform.FORGE, Boolean.TRUE);
+            .put("channels", new JSONArray().put(new JSONObject().put("required", true)))
+            .put("mods", new JSONArray().put(new JSONObject()
+                .put("modId", "create").put("modmarker", "0.5.1"))));
+        ServerDetection.Result forgeResult = expect(forge, "1.19.2", 760,
+            JoinStatus.UNKNOWN, ServerPlatform.FORGE, Boolean.TRUE);
+        expectMod(forgeResult, "create", "0.5.1");
 
         JSONObject shortened = new JSONObject().put("forgeData", new JSONObject()
             .put("channels", new JSONArray()).put("truncated", true));
-        expect(shortened, "1.20.1", 763, JoinStatus.UNKNOWN, ServerPlatform.FORGE, null);
+        ServerDetection.Result shortenedResult = expect(shortened, "1.20.1", 763,
+            JoinStatus.UNKNOWN, ServerPlatform.FORGE, null);
+        if (!shortenedResult.isModListTruncated()) {
+            throw new AssertionError("Truncated Forge data was not marked as partial");
+        }
 
         expect(new JSONObject(), "Paper 1.21.4", 768, JoinStatus.OPEN,
             ServerPlatform.PAPER, Boolean.FALSE);
@@ -21,8 +29,11 @@ public class ServerDetectionTest {
 
         JSONObject legacy = new JSONObject().put("modinfo", new JSONObject()
             .put("type", "FML").put("modList", new JSONArray()));
-        expect(legacy, "1.12.2", 340, JoinStatus.OPEN,
+        legacy.getJSONObject("modinfo").getJSONArray("modList")
+            .put(new JSONObject().put("modid", "jei").put("version", "4.16"));
+        ServerDetection.Result legacyResult = expect(legacy, "1.12.2", 340, JoinStatus.OPEN,
             ServerPlatform.FORGE, null);
+        expectMod(legacyResult, "jei", "4.16");
 
         expect(new JSONObject(), "NeoForge 21.1", 767, JoinStatus.MODS_REQUIRED,
             ServerPlatform.NEOFORGE, Boolean.TRUE);
@@ -31,14 +42,23 @@ public class ServerDetectionTest {
             .put("channels", new JSONArray())
             .put("mods", new JSONArray())
             .put("d", packedForgeData()));
-        expect(packed, "1.20.1", 763, JoinStatus.UNKNOWN,
+        ServerDetection.Result packedResult = expect(packed, "1.20.1", 763, JoinStatus.UNKNOWN,
             ServerPlatform.FORGE, Boolean.TRUE);
+        expectMod(packedResult, "examplemod", "1.0");
+
+        ServerInfo info = new ServerInfo("localhost", 25565, true, "1.20.1", 0, 20, "",
+            10, 763, JoinStatus.UNKNOWN, "", ServerPlatform.FORGE, Boolean.TRUE,
+            packedResult.getMods(), packedResult.isModListTruncated());
+        if (!"Mods (1): examplemod".equals(info.getCompactModSummary())) {
+            throw new AssertionError("Unexpected compact mod summary: " + info.getCompactModSummary());
+        }
 
         System.out.println("Server detection checks passed");
     }
 
-    private static void expect(JSONObject status, String version, int protocol, JoinStatus joinStatus,
-                               ServerPlatform platform, Boolean clientModsRequired) {
+    private static ServerDetection.Result expect(JSONObject status, String version, int protocol,
+                                                 JoinStatus joinStatus, ServerPlatform platform,
+                                                 Boolean clientModsRequired) {
         ServerDetection.Result result = ServerDetection.detect(status, version, protocol, joinStatus, "");
         if (result.getPlatform() != platform) {
             throw new AssertionError(version + " -> " + result.getPlatform() + ", expected " + platform);
@@ -47,6 +67,14 @@ public class ServerDetectionTest {
                 : !clientModsRequired.equals(result.getClientModsRequired())) {
             throw new AssertionError(version + " mods -> " + result.getClientModsRequired()
                 + ", expected " + clientModsRequired);
+        }
+        return result;
+    }
+
+    private static void expectMod(ServerDetection.Result result, String id, String version) {
+        DetectedMod expected = new DetectedMod(id, version);
+        if (!result.getMods().contains(expected)) {
+            throw new AssertionError("Missing mod " + expected + " in " + result.getMods());
         }
     }
 
