@@ -525,9 +525,9 @@ public class ScannerGUI extends JFrame {
 
             ServerInfo info = progress.getLastResult();
             if (info != null && info.isOnline()) {
-                statusLabel.setText(String.format("%sFound: %s:%d [%s] Access: %s",
+                statusLabel.setText(String.format("%sFound: %s:%d [%s] %s | Access: %s",
                     prefix, info.getIp(), info.getPort(), info.getVersion(),
-                    info.getJoinStatus().getLabel()));
+                    info.getServerPlatform().getLabel(), info.getJoinStatus().getLabel()));
             } else if (info != null) {
                 statusLabel.setText(prefix + "Scanning: " + info.getIp() + ":" + info.getPort());
             }
@@ -676,6 +676,14 @@ public class ScannerGUI extends JFrame {
         if (previous.getJoinStatus() != current.getJoinStatus()) {
             changes.add("access " + previous.getJoinStatus().getLabel()
                 + " -> " + current.getJoinStatus().getLabel());
+        }
+        if (previous.getServerPlatform() != current.getServerPlatform()) {
+            changes.add("core " + previous.getServerPlatform().getLabel()
+                + " -> " + current.getServerPlatform().getLabel());
+        }
+        if (!Objects.equals(previous.getClientModsRequired(), current.getClientModsRequired())) {
+            changes.add("client mods " + previous.getClientModsText()
+                + " -> " + current.getClientModsText());
         }
         if (!Objects.equals(previous.getKickReason(), current.getKickReason())) {
             changes.add("kick reason changed");

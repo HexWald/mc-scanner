@@ -14,6 +14,8 @@ public class ServerInfo {
     private final int protocolVersion;
     private final JoinStatus joinStatus;
     private final String kickReason;
+    private final ServerPlatform serverPlatform;
+    private final Boolean clientModsRequired;
     
     public ServerInfo(String ip, int port, boolean online, String version,
                       int playersOnline, int playersMax, String motd,
@@ -31,6 +33,14 @@ public class ServerInfo {
     public ServerInfo(String ip, int port, boolean online, String version,
                       int playersOnline, int playersMax, String motd,
                       long ping, int protocolVersion, JoinStatus joinStatus, String kickReason) {
+        this(ip, port, online, version, playersOnline, playersMax, motd, ping, protocolVersion,
+            joinStatus, kickReason, ServerPlatform.UNKNOWN, null);
+    }
+
+    public ServerInfo(String ip, int port, boolean online, String version,
+                      int playersOnline, int playersMax, String motd,
+                      long ping, int protocolVersion, JoinStatus joinStatus, String kickReason,
+                      ServerPlatform serverPlatform, Boolean clientModsRequired) {
         this.ip = ip;
         this.port = port;
         this.online = online;
@@ -43,6 +53,8 @@ public class ServerInfo {
         this.protocolVersion = protocolVersion;
         this.joinStatus = joinStatus != null ? joinStatus : JoinStatus.UNKNOWN;
         this.kickReason = cleanText(kickReason);
+        this.serverPlatform = serverPlatform != null ? serverPlatform : ServerPlatform.UNKNOWN;
+        this.clientModsRequired = clientModsRequired;
     }
     
     public ServerInfo(String ip, int port) {
@@ -71,6 +83,12 @@ public class ServerInfo {
     public int getProtocolVersion() { return protocolVersion; }
     public JoinStatus getJoinStatus() { return joinStatus; }
     public String getKickReason() { return kickReason; }
+    public ServerPlatform getServerPlatform() { return serverPlatform; }
+    public Boolean getClientModsRequired() { return clientModsRequired; }
+    public String getClientModsText() {
+        if (clientModsRequired == null) return "UNKNOWN";
+        return clientModsRequired ? "YES" : "NO";
+    }
     
     @Override
     public String toString() {
@@ -81,9 +99,9 @@ public class ServerInfo {
         if (cleanMotd.length() > 60) cleanMotd = cleanMotd.substring(0, 57) + "...";
         
         String reason = kickReason.isEmpty() ? "" : " | Reason: " + shorten(kickReason, 100);
-        return String.format("%s:%-5d | %-15s | Players: %3d/%-3d | Ping: %4dms | Access: %-20s | %s%s",
+        return String.format("%s:%-5d | %-15s | Players: %3d/%-3d | Ping: %4dms | Core: %-16s | Mods: %-7s | Access: %-20s | %s%s",
             ip, port, version, playersOnline, playersMax, ping,
-            joinStatus.getLabel(), cleanMotd, reason);
+            serverPlatform.getLabel(), getClientModsText(), joinStatus.getLabel(), cleanMotd, reason);
     }
 
     private static String cleanMotd(String value) {

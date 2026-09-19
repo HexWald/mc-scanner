@@ -235,9 +235,12 @@ public class MinecraftProtocol {
             }
             
             LoginCheckResult loginCheck = checkJoinSmart(ip, port, version, protocolVersion, checkUsername);
+            ServerDetection.Result detection = ServerDetection.detect(
+                obj, version, protocolVersion, loginCheck.joinStatus, loginCheck.reason);
             
             return new ServerInfo(ip, port, true, version, online, max, motd, ping, protocolVersion,
-                loginCheck.joinStatus, loginCheck.reason);
+                loginCheck.joinStatus, loginCheck.reason, detection.getPlatform(),
+                detection.getClientModsRequired());
             
         } catch (JSONException e) {
             return new ServerInfo(ip, port, true, "Parse Error", 0, 0, "", false, ping);

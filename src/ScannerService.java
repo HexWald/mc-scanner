@@ -263,7 +263,7 @@ public class ScannerService {
         try (PrintWriter writer = new PrintWriter(new BufferedWriter(
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)), true)) {
             writer.write('\ufeff');
-            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,whitelist,access,kickReason,motd");
+            writer.println("ip,port,version,protocol,playersOnline,playersMax,pingMs,serverType,clientModsRequired,whitelist,access,kickReason,motd");
             for (ServerInfo info : getResultsSnapshot()) {
                 writer.println(String.join(",",
                     csv(info.getIp()),
@@ -273,6 +273,8 @@ public class ScannerService {
                     String.valueOf(info.getPlayersOnline()),
                     String.valueOf(info.getPlayersMax()),
                     String.valueOf(info.getPing()),
+                    csv(info.getServerPlatform().getLabel()),
+                    csv(info.getClientModsText()),
                     csv(whitelistText(info)),
                     csv(info.getJoinStatus().name()),
                     csv(info.getKickReason()),
@@ -303,6 +305,9 @@ public class ScannerService {
             server.put("playersOnline", info.getPlayersOnline());
             server.put("playersMax", info.getPlayersMax());
             server.put("pingMs", info.getPing());
+            server.put("serverType", info.getServerPlatform().getLabel());
+            Boolean clientModsRequired = info.getClientModsRequired();
+            server.put("clientModsRequired", clientModsRequired != null ? clientModsRequired : JSONObject.NULL);
             Boolean whitelist = info.getWhitelistResult();
             server.put("whitelist", whitelist != null ? whitelist : JSONObject.NULL);
             server.put("access", info.getJoinStatus().name());
